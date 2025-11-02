@@ -6,6 +6,7 @@ import mongoose from 'mongoose';
 import authRoutes from './routes/auth';
 import mealRoutes from './routes/meals';
 import messRoutes from './routes/mess';
+import expenseRoutes from './routes/expenses';
 
 dotenv.config();
 
@@ -30,6 +31,7 @@ mongoose
 app.use('/api/auth', authRoutes);
 app.use('/api/mess', messRoutes);
 app.use('/api/meals', mealRoutes);
+app.use('/api/expenses', expenseRoutes);
 
 // Main Route
 app.get('/', (req, res) => {

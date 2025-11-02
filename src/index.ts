@@ -4,6 +4,7 @@ import express from 'express';
 import helmet from 'helmet';
 import mongoose from 'mongoose';
 import authRoutes from './routes/auth';
+import mealRoutes from './routes/meals';
 import messRoutes from './routes/mess';
 
 dotenv.config();
@@ -28,6 +29,7 @@ mongoose
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/mess', messRoutes);
+app.use('/api/meals', mealRoutes);
 
 // Main Route
 app.get('/', (req, res) => {

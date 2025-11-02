@@ -145,7 +145,9 @@ router.get('/:messId', authMiddleware, async (req: AuthRequest, res: Response) =
           name: '$user.name',
           email: '$user.email',
           totalMeals: 1,
-          mealCost: { $multiply: ['$totalMeals', mess.mealRate] },
+          mealCost: {
+            $round: [{ $multiply: ['$totalMeals', mess.mealRate] }, 2],
+          },
           totalDeposit: {
             $sum: {
               $map: {
@@ -178,13 +180,22 @@ router.get('/:messId', authMiddleware, async (req: AuthRequest, res: Response) =
     const totalExpenses = monthlyExpenses.length > 0 ? monthlyExpenses[0].totalExpenses : 0;
     const expensePerMember = mess.members.length > 0 ? totalExpenses / mess.members.length : 0;
 
-    // CORRECTED: Add balance calculation to member reports
+    // CORRECTED: Calculate balance properly
     // Balance = Total Deposit - (Meal Cost + Expense Share)
-    const memberReportsWithBalance = memberReports.map((report) => ({
-      ...report,
-      expenseShare: expensePerMember,
-      balance: (report.totalDeposit || 0) - (report.mealCost + expensePerMember),
-    }));
+    const memberReportsWithBalance = memberReports.map((report) => {
+      const mealCost = parseFloat(report.mealCost.toFixed(2));
+      const totalDeposit = parseFloat((report.totalDeposit || 0).toFixed(2));
+      const expenseShare = parseFloat(expensePerMember.toFixed(2));
+      const balance = parseFloat((totalDeposit - mealCost).toFixed(2));
+
+      return {
+        ...report,
+        mealCost,
+        totalDeposit,
+        expenseShare,
+        balance,
+      };
+    });
 
     // Get detailed expenses with expensedBy information
     const detailedExpenses = await Expense.find({
@@ -216,9 +227,10 @@ router.get('/:messId', authMiddleware, async (req: AuthRequest, res: Response) =
       summary: {
         totalMembers: mess.members.length,
         totalMeals: monthlyMeals.length > 0 ? monthlyMeals[0].totalMeals : 0,
-        totalExpenses,
-        totalDeposits: monthlyDeposits.length > 0 ? monthlyDeposits[0].totalDeposits : 0,
-        mealRate: mess.mealRate,
+        totalExpenses: parseFloat(totalExpenses.toFixed(2)),
+        totalDeposits:
+          monthlyDeposits.length > 0 ? parseFloat(monthlyDeposits[0].totalDeposits.toFixed(2)) : 0,
+        mealRate: parseFloat(mess.mealRate.toFixed(2)), // Ensure meal rate has 2 decimal places
         expenseCount: monthlyExpenses.length > 0 ? monthlyExpenses[0].expenseCount : 0,
         mealEntries: monthlyMeals.length > 0 ? monthlyMeals[0].mealEntries : 0,
         depositCount: monthlyDeposits.length > 0 ? monthlyDeposits[0].depositCount : 0,
@@ -233,8 +245,11 @@ router.get('/:messId', authMiddleware, async (req: AuthRequest, res: Response) =
       detailedDeposits,
       calculations: {
         expensePerMember: expensePerMember.toFixed(2),
-        netBalance:
-          (monthlyDeposits.length > 0 ? monthlyDeposits[0].totalDeposits : 0) - totalExpenses,
+        netBalance: parseFloat(
+          (
+            (monthlyDeposits.length > 0 ? monthlyDeposits[0].totalDeposits : 0) - totalExpenses
+          ).toFixed(2)
+        ),
       },
     };
 

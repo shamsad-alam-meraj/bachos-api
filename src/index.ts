@@ -4,6 +4,7 @@ import express from 'express';
 import helmet from 'helmet';
 import mongoose from 'mongoose';
 import authRoutes from './routes/auth';
+import dashboardRoutes from './routes/dashboard';
 import expenseRoutes from './routes/expenses';
 import mealRoutes from './routes/meals';
 import messRoutes from './routes/mess';
@@ -23,7 +24,7 @@ app.use(express.json());
 mongoose
   .connect(
     process.env.MONGODB_URI ||
-      `mongodb+srv://${process.env.MONGODB_USERNAME}:${process.env.MONGODB_PASSWORD}@cluster0.vkygcft.mongodb.net/?appName=Cluster0`
+      `mongodb+srv://shamsadalammeraj_db_user:20H96fjzRxTkhRU3@cluster0.vkygcft.mongodb.net/?appName=Cluster0`
   )
   .then(() => console.log('MongoDB connected'))
   .catch((err) => console.error('MongoDB connection error:', err));
@@ -34,6 +35,7 @@ app.use('/api/mess', messRoutes);
 app.use('/api/meals', mealRoutes);
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Main Route
 app.get('/', (req, res) => {

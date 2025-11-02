@@ -10,6 +10,7 @@ import depositRoutes from './routes/deposits';
 import expenseRoutes from './routes/expenses';
 import mealRoutes from './routes/meals';
 import messRoutes from './routes/mess';
+import reportsRoutes from './routes/reports';
 import userRoutes from './routes/users';
 
 dotenv.config();
@@ -40,6 +41,7 @@ app.use('/api/expenses', expenseRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/deposits', depositRoutes);
+app.use('/api/reports', reportsRoutes);
 
 // Main Route
 app.get('/', (req, res) => {

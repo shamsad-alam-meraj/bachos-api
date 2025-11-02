@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import mongoose from 'mongoose';
 import authRoutes from './routes/auth';
 import dashboardRoutes from './routes/dashboard';
+import depositRoutes from './routes/deposits';
 import expenseRoutes from './routes/expenses';
 import mealRoutes from './routes/meals';
 import messRoutes from './routes/mess';
@@ -36,6 +37,7 @@ app.use('/api/meals', mealRoutes);
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/deposits', depositRoutes);
 
 // Main Route
 app.get('/', (req, res) => {

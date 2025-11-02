@@ -1,6 +1,7 @@
 import express, { type Response } from 'express';
 import mongoose from 'mongoose';
 import { authMiddleware, type AuthRequest } from '../middleware/auth';
+import Deposit from '../models/Deposit';
 import Expense from '../models/Expense';
 import Meal from '../models/Meal';
 import Mess from '../models/Mess';
@@ -77,6 +78,26 @@ router.get('/:messId', authMiddleware, async (req: AuthRequest, res: Response) =
             },
           },
           mealEntries: { $sum: 1 },
+        },
+      },
+    ]);
+
+    // Get total deposits for the current month
+    const monthlyDeposits = await Deposit.aggregate([
+      {
+        $match: {
+          messId: new mongoose.Types.ObjectId(messId),
+          date: {
+            $gte: startOfMonth,
+            $lte: endOfMonth,
+          },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalDeposits: { $sum: '$amount' },
+          depositCount: { $sum: 1 },
         },
       },
     ]);
@@ -180,13 +201,11 @@ router.get('/:messId', authMiddleware, async (req: AuthRequest, res: Response) =
     // Calculate statistics
     const totalExpenses = monthlyExpenses.length > 0 ? monthlyExpenses[0].totalExpenses : 0;
     const totalMeals = monthlyMeals.length > 0 ? monthlyMeals[0].totalMeals : 0;
+    const totalDeposits = monthlyDeposits.length > 0 ? monthlyDeposits[0].totalDeposits : 0;
     const totalMembers = mess.members.length;
 
     // Calculate meal rate (expenses per meal)
     const mealRate = totalMeals > 0 ? Math.round(totalExpenses / totalMeals) : 0;
-
-    // Calculate average per member (total expenses divided by number of members)
-    const avgPerMember = totalMembers > 0 ? Math.round(totalExpenses / totalMembers) : 0;
 
     // Calculate member meal statistics
     const memberMealStats = dailyMealStats.map((stat) => ({
@@ -216,7 +235,7 @@ router.get('/:messId', authMiddleware, async (req: AuthRequest, res: Response) =
         mealRate: mealRate,
         totalExpenses: totalExpenses,
         totalMeals: totalMeals,
-        avgPerMember: avgPerMember,
+        totalDeposits: totalDeposits,
         currency: '৳',
         createdAt: mess.createdAt,
         updatedAt: new Date(),
@@ -225,10 +244,11 @@ router.get('/:messId', authMiddleware, async (req: AuthRequest, res: Response) =
         totalMembers: totalMembers,
         totalMeals: totalMeals,
         totalExpenses: totalExpenses,
+        totalDeposits: totalDeposits,
         mealRate: mealRate,
-        avgPerMember: avgPerMember,
         expenseCount: monthlyExpenses.length > 0 ? monthlyExpenses[0].expenseCount : 0,
         mealEntries: monthlyMeals.length > 0 ? monthlyMeals[0].mealEntries : 0,
+        depositCount: monthlyDeposits.length > 0 ? monthlyDeposits[0].depositCount : 0,
       },
       memberStats: memberMealStats,
       expenseBreakdown: expenseByCategory,

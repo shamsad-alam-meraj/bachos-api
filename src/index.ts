@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import express from 'express';
 import helmet from 'helmet';
 import mongoose from 'mongoose';
+import analyticsRoutes from './routes/analytics';
 import authRoutes from './routes/auth';
 import dashboardRoutes from './routes/dashboard';
 import depositRoutes from './routes/deposits';
@@ -31,6 +32,7 @@ mongoose
   .catch((err) => console.error('MongoDB connection error:', err));
 
 // Routes
+app.use('/api/analytics', analyticsRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/mess', messRoutes);
 app.use('/api/meals', mealRoutes);

@@ -4,9 +4,10 @@ import express from 'express';
 import helmet from 'helmet';
 import mongoose from 'mongoose';
 import authRoutes from './routes/auth';
+import expenseRoutes from './routes/expenses';
 import mealRoutes from './routes/meals';
 import messRoutes from './routes/mess';
-import expenseRoutes from './routes/expenses';
+import userRoutes from './routes/users';
 
 dotenv.config();
 
@@ -32,6 +33,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/mess', messRoutes);
 app.use('/api/meals', mealRoutes);
 app.use('/api/expenses', expenseRoutes);
+app.use('/api/users', userRoutes);
 
 // Main Route
 app.get('/', (req, res) => {

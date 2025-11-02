@@ -4,6 +4,7 @@ import express from 'express';
 import helmet from 'helmet';
 import mongoose from 'mongoose';
 import authRoutes from './routes/auth';
+import messRoutes from './routes/mess';
 
 dotenv.config();
 
@@ -26,6 +27,12 @@ mongoose
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/mess', messRoutes);
+
+// Main Route
+app.get('/', (req, res) => {
+  res.json({ status: 'OK', message: `Welcome to the bachOS Server!` });
+});
 
 // Health check
 app.get('/api/health', (req, res) => {

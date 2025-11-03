@@ -2,9 +2,11 @@ import express, { type Response } from 'express';
 import { authMiddleware, type AuthRequest } from '../middleware/auth';
 import Meal from '../models/Meal';
 import Mess from '../models/Mess';
+import User from '../models/User';
 
 const router = express.Router();
 
+// Create meal - Only managers can create meals
 router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { messId, userId, breakfast, lunch, dinner, date } = req.body;
@@ -15,12 +17,10 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Mess not found' });
     }
 
-    // Check if the user is adding meal for themselves or if they're the manager
+    // Check if the user is the manager
     const isManager = mess.managerId.toString() === req.userId;
-    const isAddingForSelf = userId === req.userId;
-
-    if (!isAddingForSelf && !isManager) {
-      return res.status(403).json({ error: 'You can only add meals for yourself' });
+    if (!isManager) {
+      return res.status(403).json({ error: 'Only mess managers can add meals' });
     }
 
     // Verify that the target user belongs to the mess
@@ -41,7 +41,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     await meal.save();
 
     // Populate user info in response
-    await meal.populate('userId', 'name email');
+    await meal.populate('userId', 'name email role');
 
     res.json(meal);
   } catch (error) {
@@ -49,19 +49,106 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   }
 });
 
-router.get('/mess/:messId/month', authMiddleware, async (req: AuthRequest, res: Response) => {
+// Get meals with flexible filtering
+router.get('/mess/:messId', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { year, month } = req.query;
+    const { year, month, startDate, endDate, userId } = req.query;
+    const messId = req.params.messId;
 
-    const startDate = new Date(Number(year), Number(month) - 1, 1);
-    const endDate = new Date(Number(year), Number(month), 0);
+    let dateFilter: any = {};
+
+    if (startDate && endDate) {
+      // Custom date range
+      dateFilter = {
+        date: {
+          $gte: new Date(startDate as string),
+          $lte: new Date(endDate as string),
+        },
+      };
+    } else if (year && month) {
+      // Specific month
+      const startDate = new Date(Number(year), Number(month) - 1, 1);
+      const endDate = new Date(Number(year), Number(month), 0);
+      dateFilter = { date: { $gte: startDate, $lte: endDate } };
+    }
+    // If no date filter provided, return all meals for the mess
+
+    const userFilter = userId && userId !== 'all' ? { userId } : {};
 
     const meals = await Meal.find({
-      messId: req.params.messId,
-      date: { $gte: startDate, $lte: endDate },
-    }).populate('userId', 'name email');
+      messId,
+      ...dateFilter,
+      ...userFilter,
+    }).populate('userId', 'name email role');
 
     res.json(meals);
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// Update meal - Only managers can update meals
+router.put('/:mealId', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { breakfast, lunch, dinner, date } = req.body;
+    const mealId = req.params.mealId;
+
+    const meal = await Meal.findById(mealId).populate('userId', 'name email');
+    if (!meal) {
+      return res.status(404).json({ error: 'Meal not found' });
+    }
+
+    // Get mess to check permissions
+    const mess = await Mess.findById(meal.messId);
+    if (!mess) {
+      return res.status(404).json({ error: 'Mess not found' });
+    }
+
+    // Check if user is the manager
+    const isManager = mess.managerId.toString() === req.userId;
+    if (!isManager) {
+      return res.status(403).json({ error: 'Only mess managers can edit meals' });
+    }
+
+    // Update meal
+    meal.breakfast = breakfast;
+    meal.lunch = lunch;
+    meal.dinner = dinner;
+    meal.date = new Date(date);
+
+    await meal.save();
+
+    res.json(meal);
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// Delete meal - Only managers can delete meals
+router.delete('/:mealId', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const mealId = req.params.mealId;
+
+    const meal = await Meal.findById(mealId);
+    if (!meal) {
+      return res.status(404).json({ error: 'Meal not found' });
+    }
+
+    // Get mess to check permissions
+    const mess = await Mess.findById(meal.messId);
+    if (!mess) {
+      return res.status(404).json({ error: 'Mess not found' });
+    }
+
+    // Check if user is the manager
+    const isManager = mess.managerId.toString() === req.userId;
+    if (!isManager) {
+      return res.status(403).json({ error: 'Only mess managers can delete meals' });
+    }
+
+    await Meal.findByIdAndDelete(mealId);
+
+    res.json({ message: 'Meal deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }

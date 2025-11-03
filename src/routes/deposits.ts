@@ -6,23 +6,21 @@ import Mess from '../models/Mess';
 
 const router = express.Router();
 
-// Create a new deposit
+// Create a new deposit - Only managers can create deposits
 router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { messId, userId, amount, date, description } = req.body;
 
-    // Verify the mess exists and user has access
+    // Verify the mess exists
     const mess = await Mess.findById(messId);
     if (!mess) {
       return res.status(404).json({ error: 'Mess not found' });
     }
 
-    // Check if user is manager or admin of this mess
+    // Check if user is manager of this mess
     const isManager = mess.managerId.toString() === req.userId;
-    const isMember = mess.members.some((member) => member.toString() === req.userId);
-
-    if (!isManager && !isMember) {
-      return res.status(403).json({ error: 'Access denied to this mess' });
+    if (!isManager) {
+      return res.status(403).json({ error: 'Only mess managers can add deposits' });
     }
 
     // Verify the target user belongs to the mess
@@ -50,10 +48,11 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   }
 });
 
-// Get all deposits for a mess
+// Get all deposits for a mess with filtering
 router.get('/mess/:messId', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { messId } = req.params;
+    const { startDate, endDate, userId } = req.query;
 
     // Verify user has access to this mess
     const mess = await Mess.findById(messId);
@@ -66,10 +65,32 @@ router.get('/mess/:messId', authMiddleware, async (req: AuthRequest, res: Respon
       return res.status(403).json({ error: 'Access denied to this mess' });
     }
 
-    const deposits = await Deposit.find({ messId })
+    let dateFilter: any = {};
+    let userFilter: any = {};
+
+    // Date filter
+    if (startDate && endDate) {
+      dateFilter = {
+        date: {
+          $gte: new Date(startDate as string),
+          $lte: new Date(endDate as string),
+        },
+      };
+    }
+
+    // User filter
+    if (userId && userId !== 'all') {
+      userFilter = { userId };
+    }
+
+    const deposits = await Deposit.find({
+      messId,
+      ...dateFilter,
+      ...userFilter,
+    })
       .populate('userId', 'name email')
       .sort({ date: -1, createdAt: -1 })
-      .limit(50);
+      .limit(100);
 
     res.json(deposits);
   } catch (error) {
@@ -203,12 +224,52 @@ router.get('/mess/:messId/stats', authMiddleware, async (req: AuthRequest, res: 
   }
 });
 
+// Update a deposit - Only managers can update deposits
+router.put('/:depositId', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { depositId } = req.params;
+    const { amount, description, date, userId } = req.body;
+
+    const deposit = await Deposit.findById(depositId);
+    if (!deposit) {
+      return res.status(404).json({ error: 'Deposit not found' });
+    }
+
+    // Check if user is manager of this mess
+    const mess = await Mess.findById(deposit.messId);
+    if (!mess || mess.managerId.toString() !== req.userId) {
+      return res.status(403).json({ error: 'Only mess manager can update deposits' });
+    }
+
+    // Verify the target user belongs to the mess
+    const targetUserIsInMess = mess.members.some((member) => member.toString() === userId);
+    if (!targetUserIsInMess) {
+      return res.status(403).json({ error: 'User does not belong to this mess' });
+    }
+
+    // Update deposit
+    deposit.amount = amount;
+    deposit.description = description;
+    deposit.date = new Date(date);
+    deposit.userId = userId;
+
+    await deposit.save();
+
+    // Populate user info in response
+    await deposit.populate('userId', 'name email');
+
+    res.json(deposit);
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
 // Delete a deposit (manager only)
 router.delete('/:depositId', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { depositId } = req.params;
 
-    const deposit = await Deposit.findById(depositId).populate('messId');
+    const deposit = await Deposit.findById(depositId);
     if (!deposit) {
       return res.status(404).json({ error: 'Deposit not found' });
     }

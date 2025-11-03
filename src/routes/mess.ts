@@ -5,6 +5,7 @@ import Expense from '../models/Expense';
 import Meal from '../models/Meal';
 import Mess from '../models/Mess';
 import User from '../models/User';
+import Deposit from '../models/Deposit';
 
 const router = express.Router();
 
@@ -182,6 +183,96 @@ router.post('/:messId/add-member', authMiddleware, async (req: AuthRequest, res:
       .populate('members', 'name email phone');
 
     res.json(updatedMess);
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// GET /mess (admin only)
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const messes = await Mess.find()
+      .populate('managerId', 'name email')
+      .populate('members', 'name email');
+
+    res.json(messes);
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// DELETE /mess/admin/:messId
+router.delete('/admin/:messId', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const messId = req.params.messId;
+
+    // Delete all related data in transaction
+    await Promise.all([
+      Meal.deleteMany({ messId }),
+      Expense.deleteMany({ messId }),
+      Deposit.deleteMany({ messId }),
+      User.updateMany({ messId }, { $unset: { messId: 1 } }),
+      Mess.findByIdAndDelete(messId),
+    ]);
+
+    res.json({ message: 'Mess and all related data deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// POST /mess/admin/cleanup
+router.post('/admin/cleanup', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { messId, startDate, endDate, type } = req.body;
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    let deletedCount = 0;
+
+    if (type === 'meals' || type === 'all') {
+      const mealResult = await Meal.deleteMany({
+        messId,
+        date: { $gte: start, $lte: end },
+      });
+      deletedCount += mealResult.deletedCount;
+    }
+
+    if (type === 'expenses' || type === 'all') {
+      const expenseResult = await Expense.deleteMany({
+        messId,
+        date: { $gte: start, $lte: end },
+      });
+      deletedCount += expenseResult.deletedCount;
+    }
+
+    if (type === 'deposits' || type === 'all') {
+      const depositResult = await Deposit.deleteMany({
+        messId,
+        date: { $gte: start, $lte: end },
+      });
+      deletedCount += depositResult.deletedCount;
+    }
+
+    res.json({
+      message: 'Data cleanup completed successfully',
+      deletedCount,
+    });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }

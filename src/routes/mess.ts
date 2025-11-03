@@ -64,7 +64,8 @@ const calculateMealRate = async (messId: string): Promise<number> => {
     const meals = totalMeals.length > 0 ? totalMeals[0].total : 0;
 
     // Calculate meal rate (default to 50 if no meals)
-    const mealRate = meals > 0 ? Math.round(expenses / meals) : 50;
+    const rate = expenses / meals;
+    const mealRate = parseFloat(Number(rate).toFixed(2)); // Convert back to number
 
     return mealRate;
   } catch (error) {

@@ -204,8 +204,8 @@ router.get('/:messId', authMiddleware, async (req: AuthRequest, res: Response) =
     const totalDeposits = monthlyDeposits.length > 0 ? monthlyDeposits[0].totalDeposits : 0;
     const totalMembers = mess.members.length;
 
-    // Calculate meal rate (expenses per meal)
-    const mealRate = totalMeals > 0 ? Math.round(totalExpenses / totalMeals) : 0;
+    // Calculate meal rate (expenses per meal) - FIXED: Ensure it's always a number
+    const mealRate = totalMeals > 0 ? parseFloat((totalExpenses / totalMeals).toFixed(2)) : 0;
 
     // Calculate member meal statistics
     const memberMealStats = dailyMealStats.map((stat) => ({

@@ -38,7 +38,7 @@ A professional mess management system backend built with Express.js, TypeScript,
 
 1. **Clone the repository**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/shamsad-alam-meraj/bachos-api.git
    cd bachos-api
    ```
 
@@ -275,4 +275,4 @@ This project is licensed under the MIT License.
 
 ## Support
 
-For support, email support@bachos.com or create an issue in the repository.
+For support, email at shamsad.alam.meraj@gmail.com or create an issue in the repository.

@@ -1,8 +1,12 @@
 import cors from 'cors';
-import dotenv from 'dotenv';
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import helmet from 'helmet';
-import mongoose from 'mongoose';
+import { config } from './config/env';
+import { connectDatabase } from './config/database';
+import { errorHandler, notFoundHandler } from './middleware/errorHandler';
+import { requestLogger } from './middleware/requestLogger';
+import { rateLimiter } from './middleware/rateLimiter';
+import { logger } from './utils/logger';
 import analyticsRoutes from './routes/analytics';
 import authRoutes from './routes/auth';
 import dashboardRoutes from './routes/dashboard';
@@ -13,46 +17,111 @@ import messRoutes from './routes/mess';
 import reportsRoutes from './routes/reports';
 import userRoutes from './routes/users';
 
-dotenv.config();
-
 const app = express();
-const PORT = process.env.PORT || 4000;
 
-// Middleware
-app.use(helmet());
-app.use(cors());
-app.use(express.json());
+// Trust proxy for rate limiting and IP detection
+app.set('trust proxy', 1);
 
-// Database Connection
-mongoose
-  .connect(
-    process.env.MONGODB_URI ||
-      `mongodb+srv://shamsadalammeraj_db_user:20H96fjzRxTkhRU3@cluster0.vkygcft.mongodb.net/?appName=Cluster0`
-  )
-  .then(() => console.log('MongoDB connected'))
-  .catch((err) => console.error('MongoDB connection error:', err));
+// Security middleware
+app.use(helmet({
+  contentSecurityPolicy: config.isProd,
+  crossOriginEmbedderPolicy: config.isProd,
+}));
 
-// Routes
-app.use('/api/analytics', analyticsRoutes);
+// CORS configuration
+app.use(cors({
+  origin: config.cors.origin,
+  credentials: true,
+  optionsSuccessStatus: 200,
+}));
+
+// Body parsing
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Request logging
+if (!config.isTest) {
+  app.use(requestLogger);
+}
+
+// Rate limiting
+if (config.isProd) {
+  app.use('/api/', rateLimiter);
+}
+
+// Health check (before other routes)
+app.get('/health', (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    data: {
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      environment: config.env,
+    },
+  });
+});
+
+// API Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/mess', messRoutes);
-app.use('/api/meals', mealRoutes);
-app.use('/api/expenses', expenseRoutes);
-app.use('/api/users', userRoutes);
+app.use('/api/analytics', analyticsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/deposits', depositRoutes);
+app.use('/api/expenses', expenseRoutes);
+app.use('/api/meals', mealRoutes);
+app.use('/api/mess', messRoutes);
 app.use('/api/reports', reportsRoutes);
+app.use('/api/users', userRoutes);
 
-// Main Route
-app.get('/', (req, res) => {
-  res.json({ status: 'OK', message: `Welcome to the bachOS Server!` });
+// Root route
+app.get('/', (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    data: {
+      name: 'BachOS API',
+      version: '1.0.0',
+      description: 'Professional mess management system API',
+      documentation: '/api/docs',
+    },
+  });
 });
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date() });
+// 404 handler
+app.use(notFoundHandler);
+
+// Error handler (must be last)
+app.use(errorHandler);
+
+// Start server
+const startServer = async (): Promise<void> => {
+  try {
+    // Connect to database
+    await connectDatabase();
+
+    // Start listening
+    app.listen(config.port, () => {
+      logger.info(`🚀 Server running on port ${config.port}`);
+      logger.info(`📝 Environment: ${config.env}`);
+      logger.info(`🔗 Health check: http://localhost:${config.port}/health`);
+    });
+  } catch (error) {
+    logger.error('Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error: Error) => {
+  logger.error('Uncaught Exception:', error);
+  process.exit(1);
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason: any) => {
+  logger.error('Unhandled Rejection:', reason);
+  process.exit(1);
 });
+
+startServer();
+
+export default app;

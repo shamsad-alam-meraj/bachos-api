@@ -34,17 +34,17 @@ export const authMiddleware = async (
     }
 
     const decoded = jwt.verify(token, config.jwt.secret) as JwtPayload;
-    
+
     // Verify user still exists
     const user = await User.findById(decoded.userId).select('-password');
-    
+
     if (!user) {
       throw new UnauthorizedError('User no longer exists');
     }
 
     req.userId = decoded.userId;
     req.user = user;
-    
+
     next();
   } catch (error) {
     if (error instanceof jwt.JsonWebTokenError) {
@@ -69,13 +69,13 @@ export const optionalAuth = async (
       const token = authHeader.split(' ')[1];
       const decoded = jwt.verify(token, config.jwt.secret) as JwtPayload;
       const user = await User.findById(decoded.userId).select('-password');
-      
+
       if (user) {
         req.userId = decoded.userId;
         req.user = user;
       }
     }
-    
+
     next();
   } catch (error) {
     // Silently fail for optional auth

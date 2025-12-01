@@ -10,11 +10,7 @@ interface RateLimitStore {
 
 const store: RateLimitStore = {};
 
-export const rateLimiter = (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void => {
+export const rateLimiter = (req: Request, res: Response, next: NextFunction): void => {
   const key = req.ip || 'unknown';
   const now = Date.now();
 

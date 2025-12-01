@@ -4,12 +4,7 @@ import { AppError } from '../utils/errors';
 import { logger } from '../utils/logger';
 import { config } from '../config/env';
 
-export const errorHandler = (
-  err: Error,
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void => {
+export const errorHandler = (err: Error, req: Request, res: Response, next: NextFunction): void => {
   // Log error
   logger.error('Error occurred:', {
     message: err.message,

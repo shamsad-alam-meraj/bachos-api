@@ -23,17 +23,21 @@ const app = express();
 app.set('trust proxy', 1);
 
 // Security middleware
-app.use(helmet({
-  contentSecurityPolicy: config.isProd,
-  crossOriginEmbedderPolicy: config.isProd,
-}));
+app.use(
+  helmet({
+    contentSecurityPolicy: config.isProd,
+    crossOriginEmbedderPolicy: config.isProd,
+  })
+);
 
 // CORS configuration
-app.use(cors({
-  origin: config.cors.origin,
-  credentials: true,
-  optionsSuccessStatus: 200,
-}));
+app.use(
+  cors({
+    origin: config.cors.origin,
+    credentials: true,
+    optionsSuccessStatus: 200,
+  })
+);
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }));

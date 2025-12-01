@@ -9,7 +9,7 @@ const envSchema = z.object({
   MONGODB_URI: z.string().min(1, 'MongoDB URI is required'),
   JWT_SECRET: z.string().min(32, 'JWT secret must be at least 32 characters'),
   JWT_EXPIRES_IN: z.string().default('7d'),
-  CORS_ORIGIN: z.string().default('*'),
+  CORS_ORIGIN: z.string().default('http://localhost:3000'),
   RATE_LIMIT_WINDOW_MS: z.string().default('900000'),
   RATE_LIMIT_MAX_REQUESTS: z.string().default('100'),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
@@ -43,7 +43,9 @@ export const config = {
     expiresIn: env.JWT_EXPIRES_IN,
   },
   cors: {
-    origin: env.CORS_ORIGIN,
+    origin: env.CORS_ORIGIN.includes(',')
+      ? env.CORS_ORIGIN.split(',').map((o) => o.trim())
+      : env.CORS_ORIGIN,
   },
   rateLimit: {
     windowMs: parseInt(env.RATE_LIMIT_WINDOW_MS, 10),

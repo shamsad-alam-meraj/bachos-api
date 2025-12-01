@@ -33,10 +33,14 @@ class Logger {
     const timestamp = new Date().toISOString();
     const color = colors[level];
     const levelStr = level.toUpperCase().padEnd(5);
-    
-    const formattedArgs = args.length > 0 ? ' ' + args.map(arg => 
-      typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
-    ).join(' ') : '';
+
+    const formattedArgs =
+      args.length > 0
+        ? ' ' +
+          args
+            .map((arg) => (typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)))
+            .join(' ')
+        : '';
 
     return `${color}[${timestamp}] ${levelStr}${reset} ${message}${formattedArgs}`;
   }

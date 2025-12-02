@@ -61,6 +61,9 @@ const calculateMealRate = async (messId: string): Promise<number> => {
     const meals = totalMeals.length > 0 ? totalMeals[0].total : 0;
 
     // Calculate meal rate (default to 50 if no meals)
+    if (meals === 0) {
+      return 50;
+    }
     const rate = expenses / meals;
     const mealRate = parseFloat(Number(rate).toFixed(2)); // Convert back to number
 
@@ -108,7 +111,7 @@ export class MessService {
     // Update manager's messId and role to 'manager'
     await User.findByIdAndUpdate(messData.managerId, {
       messId: mess._id,
-      role: 'manager'
+      role: 'manager',
     });
 
     return mess;
@@ -150,8 +153,13 @@ export class MessService {
       throw new Error('User not found');
     }
 
-    if (user.messId) {
-      throw new Error('User is already in a mess');
+    if (user.messId && user.messId.toString() !== messId) {
+      throw new Error('User is already in a different mess');
+    }
+
+    // Check if user is already a member of this mess
+    if (mess.members.includes(user._id)) {
+      throw new Error('User is already a member of this mess');
     }
 
     // Add user to mess
@@ -276,6 +284,11 @@ export class MessService {
       throw new Error('Only mess manager or admin can update mess');
     }
 
+    // Validate mealRate if provided
+    if (updateData.mealRate !== undefined && (!isFinite(updateData.mealRate) || isNaN(updateData.mealRate))) {
+      throw new Error('Invalid meal rate: must be a valid number');
+    }
+
     // If manager is being changed, update the new manager's role
     if (updateData.managerId && updateData.managerId !== mess.managerId.toString()) {
       // Verify new manager exists
@@ -287,13 +300,13 @@ export class MessService {
       // Set new manager's role to 'manager' and messId
       await User.findByIdAndUpdate(updateData.managerId, {
         role: 'manager',
-        messId: messId
+        messId: messId,
       });
 
       // Add new manager to members if not already a member
       if (!mess.members.includes(new mongoose.Types.ObjectId(updateData.managerId))) {
         await Mess.findByIdAndUpdate(messId, {
-          $addToSet: { members: updateData.managerId }
+          $addToSet: { members: updateData.managerId },
         });
       }
     }

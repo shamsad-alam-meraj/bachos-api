@@ -83,14 +83,124 @@ export class ReportService {
     const totalExpenses = monthlyExpenses.length > 0 ? monthlyExpenses[0].totalExpenses : 0;
     const totalMeals = monthlyMeals.length > 0 ? monthlyMeals[0].totalMeals : 0;
     const totalDeposits = monthlyDeposits.length > 0 ? monthlyDeposits[0].totalDeposits : 0;
+    const totalMembers = mess.members.length;
+
+    // Get member reports
+    const memberReports = await User.aggregate([
+      {
+        $match: {
+          _id: { $in: mess.members },
+        },
+      },
+      {
+        $lookup: {
+          from: 'meals',
+          let: { userId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$userId', '$$userId'] },
+                    { $eq: ['$messId', new mongoose.Types.ObjectId(messId)] },
+                    { $gte: ['$date', startOfMonth] },
+                    { $lte: ['$date', endOfMonth] },
+                  ],
+                },
+              },
+            },
+            {
+              $group: {
+                _id: null,
+                totalMeals: { $sum: { $add: ['$breakfast', '$lunch', '$dinner'] } },
+              },
+            },
+          ],
+          as: 'mealData',
+        },
+      },
+      {
+        $lookup: {
+          from: 'deposits',
+          let: { userId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$userId', '$$userId'] },
+                    { $eq: ['$messId', new mongoose.Types.ObjectId(messId)] },
+                    { $gte: ['$date', startOfMonth] },
+                    { $lte: ['$date', endOfMonth] },
+                  ],
+                },
+              },
+            },
+            {
+              $group: {
+                _id: null,
+                totalDeposit: { $sum: '$amount' },
+              },
+            },
+          ],
+          as: 'depositData',
+        },
+      },
+      {
+        $project: {
+          name: 1,
+          email: 1,
+          totalMeals: { $ifNull: [{ $arrayElemAt: ['$mealData.totalMeals', 0] }, 0] },
+          totalDeposit: { $ifNull: [{ $arrayElemAt: ['$depositData.totalDeposit', 0] }, 0] },
+          mealCost: {
+            $multiply: [
+              { $ifNull: [{ $arrayElemAt: ['$mealData.totalMeals', 0] }, 0] },
+              mess.mealRate,
+            ],
+          },
+          expenseShare: totalMembers > 0 ? { $divide: [totalExpenses, totalMembers] } : 0,
+        },
+      },
+      {
+        $project: {
+          name: 1,
+          email: 1,
+          totalMeals: 1,
+          mealCost: 1,
+          totalDeposit: 1,
+          expenseShare: 1,
+          balance: { $subtract: ['$totalDeposit', '$mealCost'] },
+        },
+      },
+    ]);
+
+    // Get detailed expenses
+    const detailedExpenses = await Expense.find({
+      messId,
+      date: { $gte: startOfMonth, $lte: endOfMonth },
+    })
+      .populate('addedBy', 'name email')
+      .populate('expensedBy', 'name email')
+      .sort({ date: -1 });
+
+    // Get detailed deposits
+    const detailedDeposits = await Deposit.find({
+      messId,
+      date: { $gte: startOfMonth, $lte: endOfMonth },
+    })
+      .populate('userId', 'name email')
+      .sort({ date: -1 });
+
+    // Calculations
+    const expensePerMember = totalMembers > 0 ? (totalExpenses / totalMembers).toFixed(2) : '0';
+    const netBalance = totalDeposits - totalExpenses;
 
     return {
       summary: {
-        totalMembers: mess.members.length,
+        totalMembers,
         totalMeals,
         totalExpenses: parseFloat(totalExpenses.toFixed(2)),
-        totalDeposits:
-          monthlyDeposits.length > 0 ? parseFloat(monthlyDeposits[0].totalDeposits.toFixed(2)) : 0,
+        totalDeposits: parseFloat(totalDeposits.toFixed(2)),
         mealRate: parseFloat(mess.mealRate.toFixed(2)),
         expenseCount: monthlyExpenses.length > 0 ? monthlyExpenses[0].expenseCount : 0,
         mealEntries: monthlyMeals.length > 0 ? monthlyMeals[0].mealEntries : 0,
@@ -100,6 +210,13 @@ export class ReportService {
           end: endOfMonth,
           month: now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
         },
+      },
+      memberReports,
+      detailedExpenses,
+      detailedDeposits,
+      calculations: {
+        expensePerMember,
+        netBalance,
       },
     };
   }

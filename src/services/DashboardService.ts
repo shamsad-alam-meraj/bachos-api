@@ -91,6 +91,165 @@ export class DashboardService {
     // Calculate meal rate
     const mealRate = totalMeals > 0 ? parseFloat((totalExpenses / totalMeals).toFixed(2)) : 0;
 
+    // Get member statistics
+    const memberStats = await User.aggregate([
+      {
+        $match: {
+          _id: { $in: mess.members },
+        },
+      },
+      {
+        $lookup: {
+          from: 'meals',
+          let: { userId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$userId', '$$userId'] },
+                    { $eq: ['$messId', new mongoose.Types.ObjectId(messId)] },
+                    { $gte: ['$date', startOfMonth] },
+                    { $lte: ['$date', endOfMonth] },
+                  ],
+                },
+              },
+            },
+            {
+              $group: {
+                _id: '$date',
+                dailyMeals: { $sum: { $add: ['$breakfast', '$lunch', '$dinner'] } },
+              },
+            },
+            {
+              $group: {
+                _id: null,
+                totalMeals: { $sum: '$dailyMeals' },
+                daysWithMeals: { $sum: 1 },
+              },
+            },
+          ],
+          as: 'mealData',
+        },
+      },
+      {
+        $lookup: {
+          from: 'deposits',
+          let: { userId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$userId', '$$userId'] },
+                    { $eq: ['$messId', new mongoose.Types.ObjectId(messId)] },
+                    { $gte: ['$date', startOfMonth] },
+                    { $lte: ['$date', endOfMonth] },
+                  ],
+                },
+              },
+            },
+            {
+              $group: {
+                _id: null,
+                totalDeposit: { $sum: '$amount' },
+              },
+            },
+          ],
+          as: 'depositData',
+        },
+      },
+      {
+        $project: {
+          userId: '$_id',
+          userName: '$name',
+          totalMeals: { $ifNull: [{ $arrayElemAt: ['$mealData.totalMeals', 0] }, 0] },
+          daysWithMeals: { $ifNull: [{ $arrayElemAt: ['$mealData.daysWithMeals', 0] }, 0] },
+          avgMealsPerDay: {
+            $toString: {
+              $round: [
+                {
+                  $cond: {
+                    if: { $gt: [{ $ifNull: [{ $arrayElemAt: ['$mealData.daysWithMeals', 0] }, 0] }, 0] },
+                    then: {
+                      $divide: [
+                        { $ifNull: [{ $arrayElemAt: ['$mealData.totalMeals', 0] }, 0] },
+                        { $ifNull: [{ $arrayElemAt: ['$mealData.daysWithMeals', 0] }, 0] }
+                      ]
+                    },
+                    else: 0
+                  }
+                },
+                2
+              ]
+            }
+          },
+          _id: 0,
+        },
+      },
+    ]);
+
+    // Get expense breakdown by category
+    const expenseBreakdown = await Expense.aggregate([
+      {
+        $match: {
+          messId: new mongoose.Types.ObjectId(messId),
+          date: { $gte: startOfMonth, $lte: endOfMonth },
+        },
+      },
+      {
+        $group: {
+          _id: '$category',
+          totalAmount: { $sum: '$amount' },
+          count: { $sum: 1 },
+        },
+      },
+      {
+        $project: {
+          category: '$_id',
+          totalAmount: 1,
+          count: 1,
+          _id: 0,
+        },
+      },
+      {
+        $sort: { totalAmount: -1 },
+      },
+    ]);
+
+    // Get recent meals (last 10)
+    const recentMeals = await Meal.find({
+      messId,
+      date: { $gte: startOfMonth, $lte: endOfMonth },
+    })
+      .populate('userId', 'name email')
+      .sort({ date: -1, createdAt: -1 })
+      .limit(10);
+
+    // Get recent expenses (last 10)
+    const recentExpenses = await Expense.find({
+      messId,
+      date: { $gte: startOfMonth, $lte: endOfMonth },
+    })
+      .populate('addedBy', 'name email')
+      .populate('expensedBy', 'name email')
+      .sort({ date: -1, createdAt: -1 })
+      .limit(10);
+
+    // Calculation breakdown for meal rate
+    const calculationBreakdown = {
+      totalExpenses,
+      totalMeals,
+      mealRate,
+      calculation:
+        totalMeals > 0 ? `${totalExpenses} / ${totalMeals} = ${mealRate}` : 'No meals recorded',
+      period: {
+        start: startOfMonth,
+        end: endOfMonth,
+        month: now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+      },
+    };
+
     return {
       mess: {
         _id: mess._id,
@@ -117,6 +276,11 @@ export class DashboardService {
         mealEntries: monthlyMeals.length > 0 ? monthlyMeals[0].mealEntries : 0,
         depositCount: monthlyDeposits.length > 0 ? monthlyDeposits[0].depositCount : 0,
       },
+      memberStats,
+      expenseBreakdown,
+      recentMeals,
+      recentExpenses,
+      calculationBreakdown,
     };
   }
 }

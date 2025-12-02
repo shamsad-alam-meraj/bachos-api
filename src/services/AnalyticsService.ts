@@ -84,8 +84,157 @@ export class AnalyticsService {
     const totalMeals = monthlyMeals.length > 0 ? monthlyMeals[0].totalMeals : 0;
     const totalDeposits = monthlyDeposits.length > 0 ? monthlyDeposits[0].totalDeposits : 0;
 
+    // Get total members
+    const totalMembers = mess.members.length;
+
+    // Get member statistics
+    const memberStats = await User.aggregate([
+      {
+        $match: {
+          _id: { $in: mess.members },
+        },
+      },
+      {
+        $lookup: {
+          from: 'meals',
+          let: { userId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$userId', '$$userId'] },
+                    { $eq: ['$messId', new mongoose.Types.ObjectId(messId)] },
+                    { $gte: ['$date', startOfMonth] },
+                    { $lte: ['$date', endOfMonth] },
+                  ],
+                },
+              },
+            },
+            {
+              $group: {
+                _id: null,
+                totalMeals: { $sum: { $add: ['$breakfast', '$lunch', '$dinner'] } },
+                mealDays: { $sum: 1 },
+              },
+            },
+          ],
+          as: 'mealData',
+        },
+      },
+      {
+        $lookup: {
+          from: 'deposits',
+          let: { userId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$userId', '$$userId'] },
+                    { $eq: ['$messId', new mongoose.Types.ObjectId(messId)] },
+                    { $gte: ['$date', startOfMonth] },
+                    { $lte: ['$date', endOfMonth] },
+                  ],
+                },
+              },
+            },
+            {
+              $group: {
+                _id: null,
+                totalDeposit: { $sum: '$amount' },
+              },
+            },
+          ],
+          as: 'depositData',
+        },
+      },
+      {
+        $project: {
+          name: 1,
+          meals: { $ifNull: [{ $arrayElemAt: ['$mealData.totalMeals', 0] }, 0] },
+          mealDays: { $ifNull: [{ $arrayElemAt: ['$mealData.mealDays', 0] }, 0] },
+          totalDeposit: { $ifNull: [{ $arrayElemAt: ['$depositData.totalDeposit', 0] }, 0] },
+          mealCost: {
+            $multiply: [
+              { $ifNull: [{ $arrayElemAt: ['$mealData.totalMeals', 0] }, 0] },
+              mess.mealRate,
+            ],
+          },
+        },
+      },
+    ]);
+
+    // Financial overview
+    const financialOverview = [
+      { name: 'Expenses', value: totalExpenses },
+      { name: 'Deposits', value: totalDeposits },
+    ];
+
+    // Expense categories
+    const categoryStats = await Expense.aggregate([
+      {
+        $match: {
+          messId: new mongoose.Types.ObjectId(messId),
+          date: { $gte: startOfMonth, $lte: endOfMonth },
+        },
+      },
+      {
+        $group: {
+          _id: '$category',
+          value: { $sum: '$amount' },
+          count: { $sum: 1 },
+        },
+      },
+      {
+        $project: {
+          name: '$_id',
+          value: 1,
+          count: 1,
+          _id: 0,
+        },
+      },
+    ]);
+
+    // Daily meal trends
+    const dailyTrends = await Meal.aggregate([
+      {
+        $match: {
+          messId: new mongoose.Types.ObjectId(messId),
+          date: { $gte: startOfMonth, $lte: endOfMonth },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: '%Y-%m-%d', date: '$date' },
+          },
+          meals: { $sum: { $add: ['$breakfast', '$lunch', '$dinner'] } },
+        },
+      },
+      {
+        $project: {
+          date: '$_id',
+          meals: 1,
+          _id: 0,
+        },
+      },
+      {
+        $sort: { date: 1 },
+      },
+    ]);
+
+    // Calculations
+    const avgMealsPerMember = totalMembers > 0 ? (totalMeals / totalMembers).toFixed(1) : '0';
+    const avgExpensePerMember = totalMembers > 0 ? (totalExpenses / totalMembers).toFixed(2) : '0';
+    const netBalance = totalDeposits - totalExpenses;
+    const mealCostTotal = totalMeals * mess.mealRate;
+    const mealCostPercentage =
+      totalExpenses > 0 ? ((mealCostTotal / totalExpenses) * 100).toFixed(1) : '0';
+
     return {
       summary: {
+        totalMembers,
         totalMeals,
         totalExpenses,
         totalDeposits,
@@ -98,6 +247,16 @@ export class AnalyticsService {
           end: endOfMonth,
           month: now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
         },
+      },
+      memberStats,
+      financialOverview,
+      categoryStats,
+      dailyTrends,
+      calculations: {
+        avgMealsPerMember,
+        avgExpensePerMember,
+        netBalance,
+        mealCostPercentage,
       },
     };
   }

@@ -153,8 +153,13 @@ export class MessService {
       throw new Error('User not found');
     }
 
-    if (user.messId) {
-      throw new Error('User is already in a mess');
+    if (user.messId && user.messId.toString() !== messId) {
+      throw new Error('User is already in a different mess');
+    }
+
+    // Check if user is already a member of this mess
+    if (mess.members.includes(user._id)) {
+      throw new Error('User is already a member of this mess');
     }
 
     // Add user to mess

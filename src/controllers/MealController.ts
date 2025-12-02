@@ -23,6 +23,19 @@ export class MealController {
     sendSuccess(res, meals);
   });
 
+  static getAllMeals = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { messId, userId, startDate, endDate, page, limit } = req.query as any;
+    const result = await MealService.getAllMeals(req.userId!, {
+      messId,
+      userId,
+      startDate,
+      endDate,
+      page,
+      limit,
+    });
+    sendSuccess(res, result);
+  });
+
   static updateMeal = asyncHandler(async (req: AuthRequest, res: Response) => {
     const { breakfast, lunch, dinner, date } = req.body;
     const mealId = req.params.mealId;

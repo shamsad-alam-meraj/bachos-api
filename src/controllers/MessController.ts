@@ -45,4 +45,24 @@ export class MessController {
     const result = await MessService.cleanupData(messId, startDate, endDate, type, req.userId!);
     sendSuccess(res, { message: 'Data cleanup completed successfully', ...result });
   });
+
+  static updateMess = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { messId } = req.params;
+    const { name, description, address, mealRate, currency, managerId } = req.body;
+    const mess = await MessService.updateMess(messId, {
+      name,
+      description,
+      address,
+      mealRate,
+      currency,
+      managerId,
+    }, req.userId!);
+    sendSuccess(res, mess, 'Mess updated successfully');
+  });
+
+  static removeMember = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { messId, userId } = req.params;
+    const mess = await MessService.removeMember(messId, userId, req.userId!);
+    sendSuccess(res, mess, 'Member removed successfully');
+  });
 }

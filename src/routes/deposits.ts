@@ -7,6 +7,9 @@ const router = express.Router();
 // Create a new deposit - Only managers can create deposits
 router.post('/', authMiddleware, DepositController.createDeposit);
 
+// Get deposits with flexible filtering
+router.get('/', authMiddleware, DepositController.getAllDeposits);
+
 // Get all deposits for a mess with filtering
 router.get('/mess/:messId', authMiddleware, DepositController.getDeposits);
 

@@ -105,8 +105,11 @@ export class MessService {
 
     await mess.save();
 
-    // Update manager's messId
-    await User.findByIdAndUpdate(messData.managerId, { messId: mess._id });
+    // Update manager's messId and role to 'manager'
+    await User.findByIdAndUpdate(messData.managerId, {
+      messId: mess._id,
+      role: 'manager'
+    });
 
     return mess;
   }
@@ -177,9 +180,19 @@ export class MessService {
   }
 
   static async deleteMess(messId: string, requestingUserId: string) {
+    const mess = await Mess.findById(messId);
+    if (!mess) {
+      throw new Error('Mess not found');
+    }
+
     const user = await User.findById(requestingUserId);
-    if (!user || user.role !== 'admin') {
-      throw new Error('Admin access required');
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Allow mess manager or admin to delete
+    if (mess.managerId.toString() !== requestingUserId && user.role !== 'admin') {
+      throw new Error('Only mess manager or admin can delete mess');
     }
 
     // Delete all related data in transaction
@@ -234,5 +247,99 @@ export class MessService {
     }
 
     return { deletedCount };
+  }
+
+  static async updateMess(
+    messId: string,
+    updateData: Partial<{
+      name: string;
+      description: string;
+      address: string;
+      mealRate: number;
+      currency: string;
+      managerId: string;
+    }>,
+    requestingUserId: string
+  ) {
+    // Check if current user is the manager of this mess or admin
+    const mess = await Mess.findById(messId);
+    if (!mess) {
+      throw new Error('Mess not found');
+    }
+
+    const user = await User.findById(requestingUserId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    if (mess.managerId.toString() !== requestingUserId && user.role !== 'admin') {
+      throw new Error('Only mess manager or admin can update mess');
+    }
+
+    // If manager is being changed, update the new manager's role
+    if (updateData.managerId && updateData.managerId !== mess.managerId.toString()) {
+      // Verify new manager exists
+      const newManager = await User.findById(updateData.managerId);
+      if (!newManager) {
+        throw new Error('New manager not found');
+      }
+
+      // Set new manager's role to 'manager' and messId
+      await User.findByIdAndUpdate(updateData.managerId, {
+        role: 'manager',
+        messId: messId
+      });
+
+      // Add new manager to members if not already a member
+      if (!mess.members.includes(new mongoose.Types.ObjectId(updateData.managerId))) {
+        await Mess.findByIdAndUpdate(messId, {
+          $addToSet: { members: updateData.managerId }
+        });
+      }
+    }
+
+    const updatedMess = await Mess.findByIdAndUpdate(
+      messId,
+      { ...updateData, updatedAt: new Date() },
+      { new: true }
+    )
+      .populate('managerId', 'name email')
+      .populate('members', 'name email phone');
+
+    return updatedMess;
+  }
+
+  static async removeMember(messId: string, userId: string, requestingUserId: string) {
+    // Check if current user is the manager of this mess
+    const mess = await Mess.findById(messId);
+    if (!mess) {
+      throw new Error('Mess not found');
+    }
+
+    if (mess.managerId.toString() !== requestingUserId) {
+      throw new Error('Only mess manager can remove members');
+    }
+
+    // Cannot remove manager
+    if (mess.managerId.toString() === userId) {
+      throw new Error('Cannot remove mess manager');
+    }
+
+    // Check if user is a member
+    if (!mess.members.includes(new mongoose.Types.ObjectId(userId))) {
+      throw new Error('User is not a member of this mess');
+    }
+
+    // Remove user from mess
+    await Mess.findByIdAndUpdate(messId, { $pull: { members: userId } }, { new: true });
+
+    // Remove messId from user
+    await User.findByIdAndUpdate(userId, { $unset: { messId: 1 } });
+
+    const updatedMess = await Mess.findById(messId)
+      .populate('managerId', 'name email')
+      .populate('members', 'name email phone');
+
+    return updatedMess;
   }
 }

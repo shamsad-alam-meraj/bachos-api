@@ -1,12 +1,11 @@
 import cors from 'cors';
 import express, { type Request, type Response } from 'express';
 import helmet from 'helmet';
-import { config } from './config/env';
 import { connectDatabase } from './config/database';
+import { config } from './config/env';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
-import { requestLogger } from './middleware/requestLogger';
 import { rateLimiter } from './middleware/rateLimiter';
-import { logger } from './utils/logger';
+import { requestLogger } from './middleware/requestLogger';
 import analyticsRoutes from './routes/analytics';
 import authRoutes from './routes/auth';
 import dashboardRoutes from './routes/dashboard';
@@ -16,6 +15,7 @@ import mealRoutes from './routes/meals';
 import messRoutes from './routes/mess';
 import reportsRoutes from './routes/reports';
 import userRoutes from './routes/users';
+import { logger } from './utils/logger';
 
 const app = express();
 
@@ -82,9 +82,9 @@ app.get('/', (req: Request, res: Response) => {
   res.json({
     success: true,
     data: {
-      name: 'BachOS API',
+      name: 'bachOS API',
       version: '1.0.0',
-      description: 'Professional mess management system API',
+      description: 'bachOS meal management system API',
       documentation: '/api/docs',
     },
   });

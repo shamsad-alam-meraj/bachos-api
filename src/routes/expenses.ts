@@ -1,6 +1,6 @@
 import express from 'express';
-import { authMiddleware } from '../middleware/auth';
 import { ExpenseController } from '../controllers/ExpenseController';
+import { authMiddleware } from '../middleware/auth';
 
 const router = express.Router();
 
@@ -8,6 +8,9 @@ const router = express.Router();
 router.post('/', authMiddleware, ExpenseController.createExpense);
 
 // Get expenses with flexible filtering
+router.get('/', authMiddleware, ExpenseController.getAllExpenses);
+
+// Get expenses with flexible filtering (by mess)
 router.get('/mess/:messId', authMiddleware, ExpenseController.getExpenses);
 
 // Update expense - Only managers can update expenses

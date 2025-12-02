@@ -90,6 +90,60 @@ export class DepositService {
     return deposits;
   }
 
+  static async getAllDeposits(
+    requestingUserId: string,
+    filters: {
+      messId?: string;
+      userId?: string;
+      startDate?: string;
+      endDate?: string;
+      page?: string;
+      limit?: string;
+    }
+  ) {
+    // Build query
+    const query: any = {};
+
+    if (filters.messId) {
+      query.messId = filters.messId;
+    }
+
+    if (filters.userId) {
+      query.userId = filters.userId;
+    }
+
+    if (filters.startDate && filters.endDate) {
+      query.date = {
+        $gte: new Date(filters.startDate),
+        $lte: new Date(filters.endDate),
+      };
+    }
+
+    // Pagination
+    const page = parseInt(filters.page || '1');
+    const limit = parseInt(filters.limit || '10');
+    const skip = (page - 1) * limit;
+
+    const deposits = await Deposit.find(query)
+      .populate('userId', 'name email')
+      .populate('messId', 'name')
+      .sort({ date: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const total = await Deposit.countDocuments(query);
+
+    return {
+      deposits,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
   static async getUserDeposits(messId: string, userId: string, requestingUserId: string) {
     // Verify user has access to this mess
     const mess = await Mess.findById(messId);

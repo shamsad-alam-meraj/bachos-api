@@ -8,6 +8,9 @@ const router = express.Router();
 router.post('/', authMiddleware, MealController.createMeal);
 
 // Get meals with flexible filtering
+router.get('/', authMiddleware, MealController.getAllMeals);
+
+// Get meals with flexible filtering (by mess)
 router.get('/mess/:messId', authMiddleware, MealController.getMeals);
 
 // Update meal - Only managers can update meals

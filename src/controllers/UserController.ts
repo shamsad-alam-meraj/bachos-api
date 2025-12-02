@@ -35,4 +35,30 @@ export class UserController {
     });
     sendSuccess(res, user, 'Profile updated successfully');
   });
+
+  static getUserById = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const user = await UserService.getUserById(id, req.userId!);
+    sendSuccess(res, user);
+  });
+
+  static updateUser = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const { name, email, phone, role, dateOfBirth, profileImage } = req.body;
+    const user = await UserService.updateUser(id, {
+      name,
+      email,
+      phone,
+      role,
+      dateOfBirth,
+      profileImage,
+    }, req.userId!);
+    sendSuccess(res, user, 'User updated successfully');
+  });
+
+  static deleteUser = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const result = await UserService.deleteUser(id, req.userId!);
+    sendSuccess(res, result, 'User deleted successfully');
+  });
 }

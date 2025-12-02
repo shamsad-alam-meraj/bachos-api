@@ -27,6 +27,19 @@ export class ExpenseController {
     sendSuccess(res, expenses);
   });
 
+  static getAllExpenses = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { messId, category, startDate, endDate, page, limit } = req.query as any;
+    const result = await ExpenseService.getAllExpenses(req.userId!, {
+      messId,
+      category,
+      startDate,
+      endDate,
+      page,
+      limit,
+    });
+    sendSuccess(res, result);
+  });
+
   static updateExpense = asyncHandler(async (req: AuthRequest, res: Response) => {
     const { expenseId } = req.params;
     const { description, amount, category, expensedBy, date } = req.body;

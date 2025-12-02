@@ -26,6 +26,19 @@ export class DepositController {
     sendSuccess(res, deposits);
   });
 
+  static getAllDeposits = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { messId, userId, startDate, endDate, page, limit } = req.query as any;
+    const result = await DepositService.getAllDeposits(req.userId!, {
+      messId,
+      userId,
+      startDate,
+      endDate,
+      page,
+      limit,
+    });
+    sendSuccess(res, result);
+  });
+
   static getUserDeposits = asyncHandler(async (req: AuthRequest, res: Response) => {
     const { messId, userId } = req.params;
     const deposits = await DepositService.getUserDeposits(messId, userId, req.userId!);

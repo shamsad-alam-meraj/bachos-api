@@ -94,6 +94,61 @@ export class ExpenseService {
     return expenses;
   }
 
+  static async getAllExpenses(
+    requestingUserId: string,
+    filters: {
+      messId?: string;
+      category?: string;
+      startDate?: string;
+      endDate?: string;
+      page?: string;
+      limit?: string;
+    }
+  ) {
+    // Build query
+    const query: any = {};
+
+    if (filters.messId) {
+      query.messId = filters.messId;
+    }
+
+    if (filters.category && filters.category !== 'all') {
+      query.category = filters.category;
+    }
+
+    if (filters.startDate && filters.endDate) {
+      query.date = {
+        $gte: new Date(filters.startDate),
+        $lte: new Date(filters.endDate),
+      };
+    }
+
+    // Pagination
+    const page = parseInt(filters.page || '1');
+    const limit = parseInt(filters.limit || '10');
+    const skip = (page - 1) * limit;
+
+    const expenses = await Expense.find(query)
+      .populate('addedBy', 'name email')
+      .populate('expensedBy', 'name email')
+      .populate('messId', 'name')
+      .sort({ date: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const total = await Expense.countDocuments(query);
+
+    return {
+      expenses,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
   static async updateExpense(
     expenseId: string,
     updateData: {

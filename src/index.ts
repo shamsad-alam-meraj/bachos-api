@@ -31,13 +31,44 @@ app.use(
 );
 
 // CORS configuration
-app.use(
-  cors({
-    origin: config.cors.origin,
-    credentials: true,
-    optionsSuccessStatus: 200,
-  })
-);
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
+    // Check if origin is in allowed list
+    const allowedOrigins = Array.isArray(config.cors.origin)
+      ? config.cors.origin
+      : [config.cors.origin];
+
+    if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+      return callback(null, true);
+    }
+
+    // In development, allow localhost origins and common dev ports
+    if (config.isDev && (
+      origin.startsWith('http://localhost:') ||
+      origin.startsWith('http://127.0.0.1:') ||
+      origin.includes('vercel.app') ||
+      origin.includes('localhost')
+    )) {
+      return callback(null, true);
+    }
+
+    // Log blocked origins for debugging
+    logger.warn(`CORS blocked origin: ${origin}`);
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  optionsSuccessStatus: 200,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+};
+
+app.use(cors(corsOptions));
+
+// Handle preflight requests
+app.options('*', cors(corsOptions));
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }));

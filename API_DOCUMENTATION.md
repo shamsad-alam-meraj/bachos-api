@@ -52,6 +52,33 @@ The API uses a role-based access control system with three user roles:
 - Managers can only manage members of their assigned mess
 - Admins have access to all system features
 
+## CORS Configuration
+
+The API supports Cross-Origin Resource Sharing (CORS) for web applications. The following origins are allowed:
+
+- **Development**: `http://localhost:3000`, `http://localhost:3001`, `http://localhost:5173`, `http://127.0.0.1:*`
+- **Production**: `https://bach-os.vercel.app`
+
+### Frontend Integration
+
+When making requests from your frontend application, ensure you:
+
+1. Include credentials in your requests:
+```javascript
+fetch('http://localhost:4000/api/auth/login', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  credentials: 'include', // Important for cookies/auth
+  body: JSON.stringify({ email, password })
+});
+```
+
+2. Handle CORS preflight requests (automatically handled by browsers for simple requests)
+
+3. If you encounter CORS issues, check that your frontend is running on an allowed port
+
 ---
 
 ## Response Format

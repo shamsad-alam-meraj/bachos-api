@@ -46,12 +46,13 @@ const corsOptions = {
     }
 
     // In development, allow localhost origins and common dev ports
-    if (config.isDev && (
-      origin.startsWith('http://localhost:') ||
-      origin.startsWith('http://127.0.0.1:') ||
-      origin.includes('vercel.app') ||
-      origin.includes('localhost')
-    )) {
+    if (
+      config.isDev &&
+      (origin.startsWith('http://localhost:') ||
+        origin.startsWith('http://127.0.0.1:') ||
+        origin.includes('vercel.app') ||
+        origin.includes('localhost'))
+    ) {
       return callback(null, true);
     }
 
@@ -66,9 +67,6 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-
-// Handle preflight requests
-app.options('*', cors(corsOptions));
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }));

@@ -1,228 +1,98 @@
-# BachOS Frontend Integration Guide (Next.js)
+# BachOS API Reference Guide
 
 ## Overview
 
-This guide provides comprehensive information for Next.js developers to integrate with the BachOS API. It includes API endpoints, data models, authentication flows, and best practices for building a modern mess management application using Next.js 14+ with App Router.
+This guide provides comprehensive API documentation for the BachOS mess management system. It includes all available endpoints, request/response formats, authentication requirements, and example usage.
 
 ## Table of Contents
 
-- [Quick Start](#quick-start)
 - [Authentication](#authentication)
 - [API Endpoints](#api-endpoints)
 - [Data Models](#data-models)
-- [Integration Patterns](#integration-patterns)
-- [Frontend Architecture](#frontend-architecture)
-- [Error Handling](#error-handling)
-- [Performance Optimization](#performance-optimization)
+- [Error Responses](#error-responses)
+- [Rate Limiting](#rate-limiting)
 
-## Quick Start
+## Authentication
 
-### 1. Next.js Project Setup
+All API requests require authentication using JWT tokens in the Authorization header.
 
-```bash
-npx create-next-app@latest bachos-frontend --typescript --tailwind --app
-cd bachos-frontend
-npm install axios zustand @tanstack/react-query
+```
+Authorization: Bearer <your_jwt_token>
 ```
 
-### 2. Environment Setup
+### Login
 
-```bash
-# .env.local
-NEXT_PUBLIC_API_BASE_URL=http://localhost:4000
-NEXT_PUBLIC_APP_NAME=BachOS
+**POST** `/api/auth/login`
+
+**Request:**
+```json
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
 ```
 
-### 3. API Client Setup
-
-```typescript
-// lib/api/client.ts
-import axios, { AxiosInstance, AxiosResponse } from 'axios';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
-
-class ApiClient {
-  private axiosInstance: AxiosInstance;
-  private token: string | null = null;
-
-  constructor() {
-    this.axiosInstance = axios.create({
-      baseURL: API_BASE_URL,
-      headers: {
-        'Content-Type': 'application/json',
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "user": {
+      "id": "64f1a2b3c4d5e6f7g8h9i0j1",
+      "name": "John Doe",
+      "email": "user@example.com",
+      "role": "manager",
+      "messId": "64f1a2b3c4d5e6f7g8h9i0j2",
+      "isDeleted": false,
+      "preferences": {
+        "notifications": true,
+        "language": "en",
+        "theme": "light"
       },
-    });
-
-    // Request interceptor for auth token
-    this.axiosInstance.interceptors.request.use(
-      (config) => {
-        if (this.token) {
-          config.headers.Authorization = `Bearer ${this.token}`;
-        }
-        return config;
-      },
-      (error) => Promise.reject(error)
-    );
-
-    // Response interceptor for error handling
-    this.axiosInstance.interceptors.response.use(
-      (response: AxiosResponse) => response,
-      (error) => {
-        if (error.response?.status === 401) {
-          this.clearToken();
-          // Redirect to login if on client side
-          if (typeof window !== 'undefined') {
-            window.location.href = '/auth/login';
-          }
-        }
-        return Promise.reject(error);
-      }
-    );
-
-    // Initialize token from localStorage (client-side only)
-    if (typeof window !== 'undefined') {
-      this.token = localStorage.getItem('authToken');
+      "createdAt": "2024-01-15T10:30:00.000Z",
+      "updatedAt": "2024-01-15T10:30:00.000Z"
     }
-  }
-
-  setToken(token: string) {
-    this.token = token;
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('authToken', token);
-    }
-  }
-
-  clearToken() {
-    this.token = null;
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('authToken');
-    }
-  }
-
-  // HTTP methods
-  get<T = any>(endpoint: string, config = {}): Promise<AxiosResponse<T>> {
-    return this.axiosInstance.get(endpoint, config);
-  }
-
-  post<T = any>(endpoint: string, data = {}, config = {}): Promise<AxiosResponse<T>> {
-    return this.axiosInstance.post(endpoint, data, config);
-  }
-
-  put<T = any>(endpoint: string, data = {}, config = {}): Promise<AxiosResponse<T>> {
-    return this.axiosInstance.put(endpoint, data, config);
-  }
-
-  delete<T = any>(endpoint: string, config = {}): Promise<AxiosResponse<T>> {
-    return this.axiosInstance.delete(endpoint, config);
   }
 }
-
-export const apiClient = new ApiClient();
 ```
 
-### 3. Authentication Flow
+### Signup
 
-```typescript
-// lib/hooks/useAuth.ts
-'use client';
+**POST** `/api/auth/signup`
 
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
-import { apiClient } from '@/lib/api/client';
-
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: 'user' | 'manager' | 'admin';
-  messId?: string;
+**Request:**
+```json
+{
+  "name": "John Doe",
+  "email": "user@example.com",
+  "password": "password123",
+  "phone": "+8801712345678"
 }
+```
 
-interface AuthContextType {
-  user: User | null;
-  loading: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  logout: () => void;
-  isAuthenticated: boolean;
-  isAdmin: boolean;
-  isManager: boolean;
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const router = useRouter();
-
-  useEffect(() => {
-    checkAuthStatus();
-  }, []);
-
-  const checkAuthStatus = async () => {
-    try {
-      const token = localStorage.getItem('authToken');
-      if (token) {
-        apiClient.setToken(token);
-        const response = await apiClient.get('/api/users/profile');
-        setUser(response.data);
-      }
-    } catch (error) {
-      localStorage.removeItem('authToken');
-      apiClient.clearToken();
-    } finally {
-      setLoading(false);
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "user": {
+      "id": "64f1a2b3c4d5e6f7g8h9i0j1",
+      "name": "John Doe",
+      "email": "user@example.com",
+      "role": "user",
+      "isDeleted": false,
+      "preferences": {
+        "notifications": true,
+        "language": "en",
+        "theme": "light"
+      },
+      "createdAt": "2024-01-15T10:30:00.000Z",
+      "updatedAt": "2024-01-15T10:30:00.000Z"
     }
-  };
-
-  const login = async (email: string, password: string) => {
-    try {
-      const response = await apiClient.post('/api/auth/login', {
-        email,
-        password,
-      });
-
-      const { token, user: userData } = response.data;
-      apiClient.setToken(token);
-      setUser(userData);
-
-      router.push('/dashboard');
-      return { success: true };
-    } catch (error: any) {
-      return { success: false, error: error.response?.data?.error || 'Login failed' };
-    }
-  };
-
-  const logout = () => {
-    apiClient.clearToken();
-    setUser(null);
-    router.push('/');
-  };
-
-  const value = {
-    user,
-    loading,
-    login,
-    logout,
-    isAuthenticated: !!user,
-    isAdmin: user?.role === 'admin',
-    isManager: user?.role === 'manager',
-  };
-
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
   }
-  return context;
-};
+}
 ```
 
 ## Authentication
@@ -263,139 +133,954 @@ const canViewAllUsers = (user) => {
 
 ## API Endpoints
 
-### Authentication Endpoints
+## User Management
 
-```javascript
-// Login
-const login = async (email, password) => {
-  const response = await apiClient.post('/api/auth/login', {
-    email,
-    password,
-  });
-  return response.data;
-};
+### Get Current User Profile
 
-// Signup
-const signup = async (userData) => {
-  const response = await apiClient.post('/api/auth/signup', userData);
-  return response.data;
-};
+**GET** `/api/users/profile`
+
+**Auth:** Required
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "64f1a2b3c4d5e6f7g8h9i0j1",
+    "name": "John Doe",
+    "email": "john@example.com",
+    "role": "manager",
+    "phone": "+8801712345678",
+    "dateOfBirth": "1990-01-15T00:00:00.000Z",
+    "profileImage": "https://example.com/avatar.jpg",
+    "messId": "64f1a2b3c4d5e6f7g8h9i0j2",
+    "isDeleted": false,
+    "preferences": {
+      "notifications": true,
+      "language": "en",
+      "theme": "light"
+    },
+    "createdAt": "2024-01-15T10:30:00.000Z",
+    "updatedAt": "2024-01-15T10:30:00.000Z"
+  }
+}
 ```
 
-### User Management
+### Update User Profile
 
-```javascript
-// Get current user profile
-const getProfile = () => apiClient.get('/api/users/profile');
+**PUT** `/api/users/profile`
 
-// Update profile
-const updateProfile = (data) => apiClient.put('/api/users/profile', data);
+**Auth:** Required
 
-// Update preferences
-const updatePreferences = (preferences) =>
-  apiClient.put('/api/users/preferences', preferences);
-
-// Admin: Search users
-const searchUsers = (params) =>
-  apiClient.get('/api/users/search', { params });
-
-// Admin: Get user statistics
-const getUserStats = () => apiClient.get('/api/users/stats/overview');
+**Request:**
+```json
+{
+  "name": "John Smith",
+  "phone": "+8801712345678",
+  "dateOfBirth": "1990-01-15T00:00:00.000Z",
+  "profileImage": "https://example.com/new-avatar.jpg"
+}
 ```
 
-### Mess Management
-
-```javascript
-// Get user's mess
-const getMyMess = () => apiClient.get('/api/mess/:messId');
-
-// Update mess
-const updateMess = (messId, data) =>
-  apiClient.put(`/api/mess/${messId}`, data);
-
-// Add member
-const addMember = (messId, email) =>
-  apiClient.post(`/api/mess/${messId}/members`, { email });
-
-// Remove member
-const removeMember = (messId, userId) =>
-  apiClient.delete(`/api/mess/${messId}/members/${userId}`);
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "64f1a2b3c4d5e6f7g8h9i0j1",
+    "name": "John Smith",
+    "email": "john@example.com",
+    "phone": "+8801712345678",
+    "dateOfBirth": "1990-01-15T00:00:00.000Z",
+    "profileImage": "https://example.com/new-avatar.jpg",
+    "updatedAt": "2024-01-15T11:00:00.000Z"
+  },
+  "message": "Profile updated successfully"
+}
 ```
 
-### Meal Management
+### Update User Preferences
 
-```javascript
-// Add single meal
-const addMeal = (mealData) => apiClient.post('/api/meals', mealData);
+**PUT** `/api/users/preferences`
 
-// Bulk add meals
-const bulkAddMeals = (messId, meals) =>
-  apiClient.post('/api/meals/bulk', { messId, meals });
+**Auth:** Required
 
-// Get meals with filtering
-const getMeals = (params) => apiClient.get('/api/meals', { params });
-
-// Update meal
-const updateMeal = (mealId, data) =>
-  apiClient.put(`/api/meals/${mealId}`, data);
-
-// Delete meal
-const deleteMeal = (mealId) => apiClient.delete(`/api/meals/${mealId}`);
+**Request:**
+```json
+{
+  "notifications": false,
+  "language": "bn",
+  "theme": "dark"
+}
 ```
 
-### Subscription Management
-
-```javascript
-// Get all plans
-const getPlans = () => apiClient.get('/api/subscriptions/plans');
-
-// Create subscription
-const createSubscription = (data) =>
-  apiClient.post('/api/subscriptions', data);
-
-// Get mess subscriptions
-const getMessSubscriptions = (messId) =>
-  apiClient.get(`/api/subscriptions/mess/${messId}`);
-
-// Cancel subscription
-const cancelSubscription = (subscriptionId) =>
-  apiClient.put(`/api/subscriptions/${subscriptionId}/cancel`);
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "64f1a2b3c4d5e6f7g8h9i0j1",
+    "preferences": {
+      "notifications": false,
+      "language": "bn",
+      "theme": "dark"
+    }
+  },
+  "message": "Preferences updated successfully"
+}
 ```
 
-### AI Features
+### Search and Filter Users (Admin Only)
 
-```javascript
-// Generate market schedule
-const generateMarketSchedule = (data) =>
-  apiClient.post('/api/ai/market-schedule', data);
+**GET** `/api/users/search`
 
-// Generate meal plan
-const generateMealPlan = (prompt) =>
-  apiClient.post('/api/ai/meal-plan', { prompt });
+**Auth:** Required (Admin)
+
+**Query Parameters:**
+- `search` - Search term for name, email, or phone
+- `role` - Filter by role (user, manager, admin)
+- `messId` - Filter by mess ID
+- `page` - Page number (default: 1)
+- `limit` - Items per page (default: 10)
+- `sortBy` - Sort field (default: createdAt)
+- `sortOrder` - Sort order (asc, desc)
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "users": [
+      {
+        "id": "64f1a2b3c4d5e6f7g8h9i0j1",
+        "name": "John Doe",
+        "email": "john@example.com",
+        "role": "manager",
+        "messId": "64f1a2b3c4d5e6f7g8h9i0j2",
+        "isDeleted": false,
+        "createdAt": "2024-01-15T10:30:00.000Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 10,
+      "total": 25,
+      "totalPages": 3
+    }
+  }
+}
 ```
 
-### Dashboard & Analytics
+### Get User Statistics (Admin Only)
 
-```javascript
-// Get dashboard data
-const getDashboard = (messId) =>
-  apiClient.get(`/api/dashboard/${messId}`);
+**GET** `/api/users/stats/overview`
 
-// Get analytics
-const getAnalytics = (messId, params) =>
-  apiClient.get(`/api/analytics/${messId}`, { params });
+**Auth:** Required (Admin)
 
-// Generate reports
-const generateReport = (messId, params) =>
-  apiClient.get(`/api/reports/${messId}`, { params });
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "totalUsers": 150,
+    "activeUsers": 145,
+    "adminUsers": 3,
+    "managerUsers": 12,
+    "usersWithMess": 130,
+    "usersWithoutMess": 15,
+    "recentRegistrations": 8
+  }
+}
+```
+
+## Mess Management
+
+### Get Mess Details
+
+**GET** `/api/mess/:messId`
+
+**Auth:** Required
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "64f1a2b3c4d5e6f7g8h9i0j2",
+    "name": "Green Valley Mess",
+    "description": "A modern mess for students",
+    "address": "123 Main Street, Dhaka",
+    "managerId": "64f1a2b3c4d5e6f7g8h9i0j1",
+    "members": [
+      {
+        "id": "64f1a2b3c4d5e6f7g8h9i0j3",
+        "name": "Alice Johnson",
+        "email": "alice@example.com",
+        "role": "user"
+      }
+    ],
+    "mealRate": 50,
+    "currency": "৳",
+    "createdAt": "2024-01-10T09:00:00.000Z",
+    "updatedAt": "2024-01-10T09:00:00.000Z"
+  }
+}
+```
+
+### Update Mess
+
+**PUT** `/api/mess/:messId`
+
+**Auth:** Required (Manager only)
+
+**Request:**
+```json
+{
+  "name": "Updated Mess Name",
+  "description": "Updated description",
+  "address": "456 New Street, Dhaka",
+  "mealRate": 55
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "64f1a2b3c4d5e6f7g8h9i0j2",
+    "name": "Updated Mess Name",
+    "description": "Updated description",
+    "address": "456 New Street, Dhaka",
+    "mealRate": 55,
+    "updatedAt": "2024-01-15T12:00:00.000Z"
+  },
+  "message": "Mess updated successfully"
+}
+```
+
+### Add Member to Mess
+
+**POST** `/api/mess/:messId/members`
+
+**Auth:** Required (Manager only)
+
+**Request:**
+```json
+{
+  "email": "newmember@example.com"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "64f1a2b3c4d5e6f7g8h9i0j4",
+    "name": "New Member",
+    "email": "newmember@example.com",
+    "role": "user",
+    "messId": "64f1a2b3c4d5e6f7g8h9i0j2"
+  },
+  "message": "Member added successfully"
+}
+```
+
+### Remove Member from Mess
+
+**DELETE** `/api/mess/:messId/members/:userId`
+
+**Auth:** Required (Manager only)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Member removed successfully"
+}
+```
+
+## Meal Management
+
+### Add Single Meal
+
+**POST** `/api/meals`
+
+**Auth:** Required (Manager only)
+
+**Request:**
+```json
+{
+  "messId": "64f1a2b3c4d5e6f7g8h9i0j2",
+  "userId": "64f1a2b3c4d5e6f7g8h9i0j3",
+  "breakfast": 1,
+  "lunch": 1,
+  "dinner": 1,
+  "date": "2024-01-15",
+  "status": "taken",
+  "mealType": "regular"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "64f1a2b3c4d5e6f7g8h9i0j5",
+    "messId": "64f1a2b3c4d5e6f7g8h9i0j2",
+    "userId": {
+      "id": "64f1a2b3c4d5e6f7g8h9i0j3",
+      "name": "Alice Johnson",
+      "email": "alice@example.com"
+    },
+    "breakfast": 1,
+    "lunch": 1,
+    "dinner": 1,
+    "date": "2024-01-15T00:00:00.000Z",
+    "status": "taken",
+    "mealType": "regular",
+    "cost": 0,
+    "createdAt": "2024-01-15T13:00:00.000Z",
+    "updatedAt": "2024-01-15T13:00:00.000Z"
+  },
+  "message": "Meal created successfully"
+}
+```
+
+### Bulk Add Meals
+
+**POST** `/api/meals/bulk`
+
+**Auth:** Required (Manager only)
+
+**Request:**
+```json
+{
+  "messId": "64f1a2b3c4d5e6f7g8h9i0j2",
+  "meals": [
+    {
+      "userId": "64f1a2b3c4d5e6f7g8h9i0j3",
+      "breakfast": 1,
+      "lunch": 1,
+      "dinner": 1,
+      "date": "2024-01-15",
+      "status": "taken",
+      "mealType": "regular"
+    },
+    {
+      "userId": "64f1a2b3c4d5e6f7g8h9i0j4",
+      "breakfast": 1,
+      "lunch": 0,
+      "dinner": 1,
+      "date": "2024-01-15",
+      "status": "taken",
+      "mealType": "regular"
+    }
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "64f1a2b3c4d5e6f7g8h9i0j5",
+      "messId": "64f1a2b3c4d5e6f7g8h9i0j2",
+      "userId": {
+        "id": "64f1a2b3c4d5e6f7g8h9i0j3",
+        "name": "Alice Johnson",
+        "email": "alice@example.com"
+      },
+      "breakfast": 1,
+      "lunch": 1,
+      "dinner": 1,
+      "date": "2024-01-15T00:00:00.000Z",
+      "status": "taken",
+      "mealType": "regular",
+      "cost": 0
+    }
+  ],
+  "message": "Meals created successfully"
+}
+```
+
+### Get Meals with Filtering
+
+**GET** `/api/meals`
+
+**Auth:** Required
+
+**Query Parameters:**
+- `messId` - Mess ID
+- `userId` - User ID
+- `startDate` - Start date (YYYY-MM-DD)
+- `endDate` - End date (YYYY-MM-DD)
+- `page` - Page number
+- `limit` - Items per page
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "meals": [
+      {
+        "id": "64f1a2b3c4d5e6f7g8h9i0j5",
+        "messId": "64f1a2b3c4d5e6f7g8h9i0j2",
+        "userId": {
+          "id": "64f1a2b3c4d5e6f7g8h9i0j3",
+          "name": "Alice Johnson",
+          "email": "alice@example.com"
+        },
+        "breakfast": 1,
+        "lunch": 1,
+        "dinner": 1,
+        "date": "2024-01-15T00:00:00.000Z",
+        "status": "taken",
+        "mealType": "regular",
+        "cost": 0
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 10,
+      "total": 45,
+      "totalPages": 5
+    }
+  }
+}
+```
+
+### Update Meal
+
+**PUT** `/api/meals/:mealId`
+
+**Auth:** Required (Manager only)
+
+**Request:**
+```json
+{
+  "breakfast": 1,
+  "lunch": 0,
+  "dinner": 1,
+  "status": "taken",
+  "mealType": "regular"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "64f1a2b3c4d5e6f7g8h9i0j5",
+    "breakfast": 1,
+    "lunch": 0,
+    "dinner": 1,
+    "status": "taken",
+    "mealType": "regular",
+    "updatedAt": "2024-01-15T14:00:00.000Z"
+  },
+  "message": "Meal updated successfully"
+}
+```
+
+### Delete Meal
+
+**DELETE** `/api/meals/:mealId`
+
+**Auth:** Required (Manager only)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Meal deleted successfully"
+}
+```
+
+## Subscription Management
+
+### Get All Plans
+
+**GET** `/api/subscriptions/plans`
+
+**Auth:** Required
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "64f1a2b3c4d5e6f7g8h9i0j6",
+      "name": "Basic Plan",
+      "description": "Perfect for small messes",
+      "maxMembers": 5,
+      "duration": 1,
+      "price": 0,
+      "currency": "BDT",
+      "features": ["Basic meal tracking", "Expense management"],
+      "isActive": true,
+      "createdAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "64f1a2b3c4d5e6f7g8h9i0j7",
+      "name": "Standard Plan",
+      "description": "Ideal for medium messes",
+      "maxMembers": 15,
+      "duration": 1,
+      "price": 100,
+      "currency": "BDT",
+      "features": ["Advanced features", "Priority support"],
+      "isActive": true
+    }
+  ]
+}
+```
+
+### Create Subscription
+
+**POST** `/api/subscriptions`
+
+**Auth:** Required (Manager only)
+
+**Request:**
+```json
+{
+  "messId": "64f1a2b3c4d5e6f7g8h9i0j2",
+  "planId": "64f1a2b3c4d5e6f7g8h9i0j7",
+  "couponCode": "WELCOME10",
+  "paymentMethod": "sslcommerz",
+  "autoRenew": true
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "64f1a2b3c4d5e6f7g8h9i0j8",
+    "messId": "64f1a2b3c4d5e6f7g8h9i0j2",
+    "planId": {
+      "id": "64f1a2b3c4d5e6f7g8h9i0j7",
+      "name": "Standard Plan",
+      "price": 100
+    },
+    "couponId": "64f1a2b3c4d5e6f7g8h9i0j9",
+    "startDate": "2024-01-15T00:00:00.000Z",
+    "endDate": "2024-02-15T00:00:00.000Z",
+    "status": "pending",
+    "paymentMethod": "sslcommerz",
+    "paymentStatus": "pending",
+    "amount": 100,
+    "discountAmount": 10,
+    "finalAmount": 90,
+    "currency": "BDT",
+    "autoRenew": true
+  },
+  "message": "Subscription created successfully"
+}
+```
+
+### Get Mess Subscriptions
+
+**GET** `/api/subscriptions/mess/:messId`
+
+**Auth:** Required
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "64f1a2b3c4d5e6f7g8h9i0j8",
+      "planId": {
+        "name": "Standard Plan",
+        "price": 100
+      },
+      "status": "active",
+      "startDate": "2024-01-15T00:00:00.000Z",
+      "endDate": "2024-02-15T00:00:00.000Z",
+      "paymentStatus": "completed"
+    }
+  ]
+}
+```
+
+### Cancel Subscription
+
+**PUT** `/api/subscriptions/:subscriptionId/cancel`
+
+**Auth:** Required (Manager only)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Subscription cancelled successfully"
+}
+```
+
+## AI Features
+
+### Generate Market Schedule
+
+**POST** `/api/ai/market-schedule`
+
+**Auth:** Required (Manager only)
+
+**Request:**
+```json
+{
+  "messId": "64f1a2b3c4d5e6f7g8h9i0j2",
+  "prompt": "Create a fair rest day schedule for 10 members over January 2024. Ensure each member gets equal rest days and avoid weekends when possible.",
+  "month": 1,
+  "year": 2024
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "schedule": [
+      "03/01/2024",
+      "10/01/2024",
+      "17/01/2024",
+      "24/01/2024",
+      "31/01/2024"
+    ],
+    "explanation": "Generated schedule distributes 5 rest days per member throughout January 2024, avoiding weekends where possible for better work distribution.",
+    "confidence": 85
+  }
+}
+```
+
+### Generate Meal Plan
+
+**POST** `/api/ai/meal-plan`
+
+**Auth:** Required
+
+**Request:**
+```json
+{
+  "prompt": "Create a weekly meal plan for 20 people with vegetarian and non-vegetarian options, keeping costs under 50 BDT per meal."
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "mealPlan": "Here's a comprehensive weekly meal plan for 20 people with both vegetarian and non-vegetarian options, maintaining costs under 50 BDT per meal..."
+  }
+}
+```
+
+## Dashboard & Analytics
+
+### Get Dashboard Data
+
+**GET** `/api/dashboard/:messId`
+
+**Auth:** Required
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "totalMeals": 450,
+    "totalExpenses": 25000,
+    "totalMembers": 12,
+    "currentBalance": 15000,
+    "monthlyMeals": 135,
+    "monthlyExpenses": 7500,
+    "recentMeals": [
+      {
+        "date": "2024-01-15",
+        "count": 12,
+        "status": "taken"
+      }
+    ],
+    "recentExpenses": [
+      {
+        "description": "Grocery shopping",
+        "amount": 2500,
+        "date": "2024-01-15"
+      }
+    ]
+  }
+}
+```
+
+### Get Analytics
+
+**GET** `/api/analytics/:messId`
+
+**Auth:** Required
+
+**Query Parameters:**
+- `startDate` - Start date
+- `endDate` - End date
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "mealTrends": [
+      {
+        "date": "2024-01-15",
+        "taken": 12,
+        "skipped": 2,
+        "guest": 1
+      }
+    ],
+    "expenseBreakdown": [
+      {
+        "category": "food",
+        "amount": 15000,
+        "percentage": 60
+      }
+    ],
+    "memberContributions": [
+      {
+        "memberId": "64f1a2b3c4d5e6f7g8h9i0j3",
+        "name": "Alice Johnson",
+        "mealsTaken": 45,
+        "contribution": 2250
+      }
+    ]
+  }
+}
+```
+
+## Expense Management
+
+### Get Expenses
+
+**GET** `/api/expenses`
+
+**Auth:** Required
+
+**Query Parameters:**
+- `messId` - Mess ID
+- `category` - Filter by category
+- `startDate` - Start date
+- `endDate` - End date
+- `page` - Page number
+- `limit` - Items per page
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "expenses": [
+      {
+        "id": "64f1a2b3c4d5e6f7g8h9i0k1",
+        "messId": "64f1a2b3c4d5e6f7g8h9i0j2",
+        "description": "Weekly grocery shopping",
+        "amount": 2500,
+        "category": "food",
+        "addedBy": {
+          "id": "64f1a2b3c4d5e6f7g8h9i0j1",
+          "name": "John Doe"
+        },
+        "expensedBy": {
+          "id": "64f1a2b3c4d5e6f7g8h9i0j1",
+          "name": "John Doe"
+        },
+        "date": "2024-01-15T00:00:00.000Z",
+        "createdAt": "2024-01-15T10:00:00.000Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 10,
+      "total": 25,
+      "totalPages": 3
+    }
+  }
+}
+```
+
+### Add Expense
+
+**POST** `/api/expenses`
+
+**Auth:** Required
+
+**Request:**
+```json
+{
+  "messId": "64f1a2b3c4d5e6f7g8h9i0j2",
+  "description": "Monthly utility bill",
+  "amount": 1500,
+  "category": "utilities",
+  "expensedBy": "64f1a2b3c4d5e6f7g8h9i0j3",
+  "date": "2024-01-15"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "64f1a2b3c4d5e6f7g8h9i0k1",
+    "description": "Monthly utility bill",
+    "amount": 1500,
+    "category": "utilities",
+    "date": "2024-01-15T00:00:00.000Z",
+    "createdAt": "2024-01-15T10:00:00.000Z"
+  },
+  "message": "Expense added successfully"
+}
+```
+
+## Deposit Management
+
+### Get Deposits
+
+**GET** `/api/deposits`
+
+**Auth:** Required
+
+**Query Parameters:**
+- `messId` - Mess ID
+- `userId` - User ID
+- `startDate` - Start date
+- `endDate` - End date
+- `page` - Page number
+- `limit` - Items per page
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "deposits": [
+      {
+        "id": "64f1a2b3c4d5e6f7g8h9i0l1",
+        "messId": "64f1a2b3c4d5e6f7g8h9i0j2",
+        "userId": {
+          "id": "64f1a2b3c4d5e6f7g8h9i0j3",
+          "name": "Alice Johnson"
+        },
+        "amount": 1000,
+        "date": "2024-01-15T00:00:00.000Z",
+        "description": "Monthly deposit",
+        "createdAt": "2024-01-15T10:00:00.000Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 10,
+      "total": 12,
+      "totalPages": 2
+    }
+  }
+}
+```
+
+### Add Deposit
+
+**POST** `/api/deposits`
+
+**Auth:** Required
+
+**Request:**
+```json
+{
+  "messId": "64f1a2b3c4d5e6f7g8h9i0j2",
+  "userId": "64f1a2b3c4d5e6f7g8h9i0j3",
+  "amount": 1000,
+  "date": "2024-01-15",
+  "description": "Monthly deposit"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "64f1a2b3c4d5e6f7g8h9i0l1",
+    "amount": 1000,
+    "date": "2024-01-15T00:00:00.000Z",
+    "description": "Monthly deposit",
+    "createdAt": "2024-01-15T10:00:00.000Z"
+  },
+  "message": "Deposit added successfully"
+}
+```
+
+## Reports
+
+### Generate Report
+
+**GET** `/api/reports/:messId`
+
+**Auth:** Required
+
+**Query Parameters:**
+- `type` - Report type (monthly, member, expense)
+- `month` - Month (1-12)
+- `year` - Year
+- `startDate` - Start date
+- `endDate` - End date
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "reportType": "monthly",
+    "period": "January 2024",
+    "summary": {
+      "totalMeals": 360,
+      "totalExpenses": 25000,
+      "totalDeposits": 30000,
+      "netBalance": 5000
+    },
+    "memberBreakdown": [
+      {
+        "memberId": "64f1a2b3c4d5e6f7g8h9i0j3",
+        "name": "Alice Johnson",
+        "mealsTaken": 30,
+        "contribution": 1500,
+        "deposit": 2000,
+        "balance": 500
+      }
+    ],
+    "expenseBreakdown": [
+      {
+        "category": "food",
+        "amount": 15000,
+        "percentage": 60
+      }
+    ]
+  }
+}
 ```
 
 ## Data Models
 
-### User Model
-
+### User
 ```typescript
-interface User {
+{
   id: string;
   name: string;
   email: string;
@@ -415,10 +1100,9 @@ interface User {
 }
 ```
 
-### Mess Model
-
+### Mess
 ```typescript
-interface Mess {
+{
   id: string;
   name: string;
   description?: string;
@@ -432,10 +1116,9 @@ interface Mess {
 }
 ```
 
-### Meal Model
-
+### Meal
 ```typescript
-interface Meal {
+{
   id: string;
   messId: string;
   userId: User;
@@ -458,10 +1141,38 @@ interface Meal {
 }
 ```
 
-### Subscription Model
-
+### Expense
 ```typescript
-interface Subscription {
+{
+  id: string;
+  messId: string;
+  description: string;
+  amount: number;
+  category: 'food' | 'utilities' | 'maintenance' | 'other';
+  addedBy: User;
+  expensedBy: User;
+  date: Date;
+  createdAt: Date;
+}
+```
+
+### Deposit
+```typescript
+{
+  id: string;
+  messId: string;
+  userId: User;
+  amount: number;
+  date: Date;
+  description?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+### Subscription
+```typescript
+{
   id: string;
   messId: string;
   planId: Plan;
@@ -481,6 +1192,169 @@ interface Subscription {
   updatedAt: Date;
 }
 ```
+
+### Plan
+```typescript
+{
+  id: string;
+  name: string;
+  description?: string;
+  maxMembers: number;
+  duration: number; // in months
+  price: number;
+  currency: string;
+  features: string[];
+  isActive: boolean;
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+### Coupon
+```typescript
+{
+  id: string;
+  code: string;
+  description?: string;
+  discountType: 'percentage' | 'fixed';
+  discountValue: number;
+  maxUses?: number;
+  usedCount: number;
+  validFrom: Date;
+  validUntil: Date;
+  isActive: boolean;
+  applicablePlans: string[];
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+## Error Responses
+
+All API errors follow this format:
+
+```json
+{
+  "success": false,
+  "error": "Error message description",
+  "code": "ERROR_CODE"
+}
+```
+
+### Common Error Codes
+
+- `400` - Bad Request (validation errors)
+- `401` - Unauthorized (invalid/missing token)
+- `403` - Forbidden (insufficient permissions)
+- `404` - Not Found (resource doesn't exist)
+- `409` - Conflict (duplicate data, etc.)
+- `429` - Too Many Requests (rate limited)
+- `500` - Internal Server Error
+
+### Validation Errors
+
+```json
+{
+  "success": false,
+  "error": "Validation failed",
+  "code": "VALIDATION_ERROR",
+  "details": {
+    "field": "email",
+    "message": "Email is required"
+  }
+}
+```
+
+### Authentication Errors
+
+```json
+{
+  "success": false,
+  "error": "Invalid token",
+  "code": "INVALID_TOKEN"
+}
+```
+
+## Rate Limiting
+
+API requests are rate limited to prevent abuse:
+
+- **Authenticated requests**: 100 requests per 15 minutes
+- **Unauthenticated requests**: 10 requests per 15 minutes
+
+Rate limit headers are included in responses:
+
+```
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 95
+X-RateLimit-Reset: 1640995200
+```
+
+## Success Response Format
+
+All successful responses follow this format:
+
+```json
+{
+  "success": true,
+  "data": { ... },
+  "message": "Optional success message"
+}
+```
+
+## Pagination
+
+List endpoints support pagination:
+
+```json
+{
+  "success": true,
+  "data": {
+    "items": [...],
+    "pagination": {
+      "page": 1,
+      "limit": 10,
+      "total": 25,
+      "totalPages": 3
+    }
+  }
+}
+```
+
+## Date Format
+
+All dates are returned in ISO 8601 format:
+
+```
+2024-01-15T10:30:00.000Z
+```
+
+Date inputs should be in `YYYY-MM-DD` format for date-only fields.
+
+---
+
+## Base URL
+
+```
+https://api.bachos.com
+```
+
+## Content Type
+
+All requests should include:
+```
+Content-Type: application/json
+```
+
+## Authentication Header
+
+```
+Authorization: Bearer <your_jwt_token>
+```
+
+This API reference provides everything needed to integrate with the BachOS backend. All endpoints are fully functional and tested! 🚀
 
 ## Integration Patterns
 

@@ -49,14 +49,18 @@ export class MessController {
   static updateMess = asyncHandler(async (req: AuthRequest, res: Response) => {
     const { messId } = req.params;
     const { name, description, address, mealRate, currency, managerId } = req.body;
-    const mess = await MessService.updateMess(messId, {
-      name,
-      description,
-      address,
-      mealRate,
-      currency,
-      managerId,
-    }, req.userId!);
+    const mess = await MessService.updateMess(
+      messId,
+      {
+        name,
+        description,
+        address,
+        mealRate,
+        currency,
+        managerId,
+      },
+      req.userId!
+    );
     sendSuccess(res, mess, 'Mess updated successfully');
   });
 

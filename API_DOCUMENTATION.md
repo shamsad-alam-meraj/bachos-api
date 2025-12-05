@@ -193,26 +193,82 @@ Login user.
 
 ### Users
 
-#### GET /api/users/all
+#### GET /api/users/search
 
-Get all non-admin users (requires authentication, admin only).
+Search and filter users (requires authentication, admin only).
+
+**Query Parameters:**
+
+- `search` (optional): Search term for name, email, or phone
+- `role` (optional): Filter by role (`user`, `manager`, `admin`, or `all`)
+- `messId` (optional): Filter by mess ID or `all`
+- `page` (optional): Page number (default: 1)
+- `limit` (optional): Items per page (default: 10)
+- `sortBy` (optional): Sort field (default: `createdAt`)
+- `sortOrder` (optional): Sort order (`asc` or `desc`, default: `desc`)
 
 **Response:** `200 OK`
 
 ```json
 {
   "success": true,
-  "data": [
-    {
-      "id": "507f1f77bcf86cd799439011",
-      "name": "John Doe",
-      "email": "john@example.com",
-      "role": "user",
-      "messId": "507f1f77bcf86cd799439012"
+  "data": {
+    "users": [
+      {
+        "id": "507f1f77bcf86cd799439011",
+        "name": "John Doe",
+        "email": "john@example.com",
+        "role": "user",
+        "phone": "+1234567890",
+        "messId": {
+          "id": "507f1f77bcf86cd799439012",
+          "name": "Bachelor's Mess"
+        },
+        "isDeleted": false,
+        "preferences": {
+          "notifications": true,
+          "language": "en",
+          "theme": "light"
+        },
+        "createdAt": "2025-12-01T00:00:00.000Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 10,
+      "total": 25,
+      "totalPages": 3
     }
-  ]
+  }
 }
 ```
+
+#### GET /api/users/stats/overview
+
+Get user statistics (requires authentication, admin only).
+
+**Response:** `200 OK`
+
+```json
+{
+  "success": true,
+  "data": {
+    "totalUsers": 150,
+    "activeUsers": 145,
+    "adminUsers": 3,
+    "managerUsers": 12,
+    "usersWithMess": 130,
+    "usersWithoutMess": 15,
+    "recentRegistrations": 8
+  }
+}
+```
+
+#### GET /api/users/all
+
+Get all non-admin users (requires authentication, admin only).
+
+**Response:** `200 OK`
 
 #### GET /api/users/all-users
 
@@ -243,7 +299,13 @@ Get current user profile (requires authentication).
     "phone": "+1234567890",
     "dateOfBirth": "1990-01-01T00:00:00.000Z",
     "profileImage": "https://example.com/image.jpg",
-    "messId": "507f1f77bcf86cd799439012"
+    "messId": "507f1f77bcf86cd799439012",
+    "preferences": {
+      "notifications": true,
+      "language": "en",
+      "theme": "light"
+    },
+    "isDeleted": false
   }
 }
 ```
@@ -260,6 +322,22 @@ Update current user profile (requires authentication).
   "phone": "+1234567890",
   "dateOfBirth": "1990-01-01",
   "profileImage": "https://example.com/image.jpg"
+}
+```
+
+**Response:** `200 OK`
+
+#### PUT /api/users/preferences
+
+Update user preferences (requires authentication).
+
+**Request Body:**
+
+```json
+{
+  "notifications": true,
+  "language": "en",
+  "theme": "dark"
 }
 ```
 
@@ -300,6 +378,38 @@ Delete user by ID (requires authentication, admin only, cannot delete self).
 {
   "success": true,
   "message": "User deleted successfully"
+}
+```
+
+#### DELETE /api/users/:id/soft
+
+Soft delete user by ID (requires authentication, admin only).
+
+**Response:** `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "User deleted successfully"
+}
+```
+
+#### PUT /api/users/:id/restore
+
+Restore soft deleted user (requires authentication, admin only).
+
+**Response:** `200 OK`
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "507f1f77bcf86cd799439011",
+    "name": "John Doe",
+    "email": "john@example.com",
+    "isDeleted": false
+  },
+  "message": "User restored successfully"
 }
 ```
 
@@ -560,7 +670,7 @@ Cleanup mess data (requires authentication, admin only).
 
 #### POST /api/meals
 
-Add meal entry (requires authentication, manager only).
+Add single meal entry (requires authentication, manager only).
 
 **Request Body:**
 
@@ -571,9 +681,20 @@ Add meal entry (requires authentication, manager only).
   "breakfast": 1,
   "lunch": 1,
   "dinner": 1,
-  "date": "2025-12-01"
+  "date": "2025-12-01",
+  "status": "taken",
+  "mealType": "regular",
+  "preferences": {
+    "vegetarian": false,
+    "spicy": true,
+    "notes": "Extra spicy"
+  }
 }
 ```
+
+**Meal Status Options:** `taken`, `skipped`, `guest`, `offday`
+
+**Meal Type Options:** `regular`, `offday`, `holiday`
 
 **Response:** `201 Created`
 
@@ -593,9 +714,75 @@ Add meal entry (requires authentication, manager only).
     "lunch": 1,
     "dinner": 1,
     "date": "2025-12-01T00:00:00.000Z",
+    "status": "taken",
+    "mealType": "regular",
+    "preferences": {
+      "vegetarian": false,
+      "spicy": true,
+      "notes": "Extra spicy"
+    },
+    "cost": 0,
     "createdAt": "2025-12-01T00:00:00.000Z"
   },
   "message": "Meal created successfully"
+}
+```
+
+#### POST /api/meals/bulk
+
+Add meals for multiple members at once (requires authentication, manager only).
+
+**Request Body:**
+
+```json
+{
+  "messId": "507f1f77bcf86cd799439012",
+  "meals": [
+    {
+      "userId": "507f1f77bcf86cd799439011",
+      "breakfast": 1,
+      "lunch": 1,
+      "dinner": 1,
+      "date": "2025-12-01",
+      "status": "taken",
+      "mealType": "regular"
+    },
+    {
+      "userId": "507f1f77bcf86cd799439013",
+      "breakfast": 1,
+      "lunch": 0,
+      "dinner": 1,
+      "date": "2025-12-01",
+      "status": "taken",
+      "mealType": "regular"
+    }
+  ]
+}
+```
+
+**Response:** `201 Created`
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "507f1f77bcf86cd799439014",
+      "messId": "507f1f77bcf86cd799439012",
+      "userId": {
+        "id": "507f1f77bcf86cd799439011",
+        "name": "John Doe",
+        "email": "john@example.com"
+      },
+      "breakfast": 1,
+      "lunch": 1,
+      "dinner": 1,
+      "date": "2025-12-01T00:00:00.000Z",
+      "status": "taken",
+      "mealType": "regular"
+    }
+  ],
+  "message": "Meals created successfully"
 }
 ```
 
@@ -1309,6 +1496,252 @@ Generate reports for a mess (requires authentication).
       }
     ]
   }
+}
+```
+
+---
+
+### Subscriptions
+
+#### GET /api/subscriptions/plans
+
+Get all subscription plans (requires authentication).
+
+**Response:** `200 OK`
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "507f1f77bcf86cd799439015",
+      "name": "Basic Plan",
+      "description": "Perfect for small messes",
+      "maxMembers": 5,
+      "planType": "monthly",
+      "duration": 1,
+      "price": 500,
+      "currency": "BDT",
+      "features": ["Basic meal tracking", "Expense management"],
+      "isActive": true
+    }
+  ]
+}
+```
+
+#### POST /api/subscriptions/plans
+
+Create new subscription plan (requires authentication, admin only).
+
+**Request Body:**
+
+```json
+{
+  "name": "Premium Plan",
+  "description": "For large messes",
+  "maxMembers": 50,
+  "planType": "monthly",
+  "duration": 1,
+  "price": 2000,
+  "currency": "BDT",
+  "features": ["All features", "Priority support"]
+}
+```
+
+**Response:** `201 Created`
+
+#### PUT /api/subscriptions/plans/:id
+
+Update subscription plan (requires authentication, admin only).
+
+**Response:** `200 OK`
+
+#### DELETE /api/subscriptions/plans/:id
+
+Deactivate subscription plan (requires authentication, admin only).
+
+**Response:** `200 OK`
+
+#### GET /api/subscriptions/coupons
+
+Get all coupons (requires authentication, admin only).
+
+**Response:** `200 OK`
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "507f1f77bcf86cd799439016",
+      "code": "WELCOME10",
+      "description": "10% off for new customers",
+      "discountType": "percentage",
+      "discountValue": 10,
+      "maxUses": 100,
+      "usedCount": 5,
+      "validFrom": "2025-01-01T00:00:00.000Z",
+      "validUntil": "2025-12-31T23:59:59.999Z",
+      "isActive": true
+    }
+  ]
+}
+```
+
+#### POST /api/subscriptions/coupons
+
+Create new coupon (requires authentication, admin only).
+
+**Request Body:**
+
+```json
+{
+  "code": "SAVE500",
+  "description": "Fixed discount",
+  "discountType": "fixed",
+  "discountValue": 500,
+  "maxUses": 50,
+  "validFrom": "2025-01-01",
+  "validUntil": "2025-12-31",
+  "applicablePlans": []
+}
+```
+
+**Response:** `201 Created`
+
+#### POST /api/subscriptions
+
+Create subscription (requires authentication, manager only).
+
+**Request Body:**
+
+```json
+{
+  "messId": "507f1f77bcf86cd799439012",
+  "planId": "507f1f77bcf86cd799439015",
+  "couponCode": "WELCOME10",
+  "paymentMethod": "sslcommerz",
+  "autoRenew": true
+}
+```
+
+**Payment Methods:** `sslcommerz`, `stripe`, `bank_transfer`, `cash`
+
+**Response:** `201 Created`
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "507f1f77bcf86cd799439017",
+    "messId": "507f1f77bcf86cd799439012",
+    "planId": {
+      "id": "507f1f77bcf86cd799439015",
+      "name": "Basic Plan",
+      "price": 500
+    },
+    "couponId": {
+      "id": "507f1f77bcf86cd799439016",
+      "code": "WELCOME10",
+      "discountValue": 10
+    },
+    "startDate": "2025-12-01T00:00:00.000Z",
+    "endDate": "2026-01-01T00:00:00.000Z",
+    "status": "pending",
+    "paymentMethod": "sslcommerz",
+    "paymentStatus": "pending",
+    "amount": 500,
+    "discountAmount": 50,
+    "finalAmount": 450,
+    "transactionId": "ssl_1733011200000"
+  },
+  "message": "Subscription created successfully"
+}
+```
+
+#### GET /api/subscriptions/mess/:messId
+
+Get mess subscriptions (requires authentication, manager only).
+
+**Response:** `200 OK`
+
+#### GET /api/subscriptions/:id
+
+Get subscription details (requires authentication).
+
+**Response:** `200 OK`
+
+#### PUT /api/subscriptions/:id/cancel
+
+Cancel subscription (requires authentication, manager only).
+
+**Response:** `200 OK`
+
+#### PUT /api/subscriptions/:id/renew
+
+Renew subscription (requires authentication, manager only).
+
+**Response:** `200 OK`
+
+---
+
+### AI Features
+
+#### POST /api/ai/market-schedule
+
+Generate market/rest day schedule using AI (requires authentication, manager only).
+
+**Request Body:**
+
+```json
+{
+  "messId": "507f1f77bcf86cd799439012",
+  "prompt": "Create a fair schedule where each member gets 4 rest days per month, avoiding weekends when possible",
+  "month": 12,
+  "year": 2025
+}
+```
+
+**Response:** `200 OK`
+
+```json
+{
+  "success": true,
+  "data": {
+    "schedule": [
+      "05/12/2025",
+      "12/12/2025",
+      "19/12/2025",
+      "26/12/2025"
+    ],
+    "explanation": "Generated schedule distributes 4 rest days per member throughout December 2025, avoiding weekends",
+    "confidence": 85
+  },
+  "message": "Market schedule generated successfully"
+}
+```
+
+#### POST /api/ai/meal-plan
+
+Generate meal plan suggestions using AI (requires authentication).
+
+**Request Body:**
+
+```json
+{
+  "prompt": "Create a weekly meal plan for 5 people with vegetarian options and budget under 2000 BDT per day"
+}
+```
+
+**Response:** `200 OK`
+
+```json
+{
+  "success": true,
+  "data": {
+    "mealPlan": "Here's a suggested weekly meal plan..."
+  },
+  "message": "Meal plan generated successfully"
 }
 ```
 

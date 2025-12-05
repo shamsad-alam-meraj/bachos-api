@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  bachos-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=development
+      - MONGODB_URI=mongodb://mongodb:27017/bachos_dev
+      - JWT_SECRET=your-super-secret-jwt-key-here
+      - CORS_ORIGIN=http://localhost:3000
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      - mongodb
+    networks:
+      - bachos-network
+    command: npm run dev
+
+  mongodb:
+    image: mongo:7.0
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=bachos_dev
+    volumes:
+      - mongodb_dev_data:/data/db
+      - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d:ro
+    networks:
+      - bachos-network
+
+volumes:
+  mongodb_dev_data:
+
+networks:
+  bachos-network:
+    driver: bridge

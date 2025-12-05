@@ -170,19 +170,21 @@ export class DashboardService {
               $round: [
                 {
                   $cond: {
-                    if: { $gt: [{ $ifNull: [{ $arrayElemAt: ['$mealData.daysWithMeals', 0] }, 0] }, 0] },
+                    if: {
+                      $gt: [{ $ifNull: [{ $arrayElemAt: ['$mealData.daysWithMeals', 0] }, 0] }, 0],
+                    },
                     then: {
                       $divide: [
                         { $ifNull: [{ $arrayElemAt: ['$mealData.totalMeals', 0] }, 0] },
-                        { $ifNull: [{ $arrayElemAt: ['$mealData.daysWithMeals', 0] }, 0] }
-                      ]
+                        { $ifNull: [{ $arrayElemAt: ['$mealData.daysWithMeals', 0] }, 0] },
+                      ],
                     },
-                    else: 0
-                  }
+                    else: 0,
+                  },
                 },
-                2
-              ]
-            }
+                2,
+              ],
+            },
           },
           _id: 0,
         },

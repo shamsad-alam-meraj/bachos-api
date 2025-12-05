@@ -45,3 +45,9 @@ export class InternalServerError extends AppError {
     super(500, message, false);
   }
 }
+
+export class ApiError extends AppError {
+  constructor(message: string, statusCode = 500) {
+    super(statusCode, message);
+  }
+}

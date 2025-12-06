@@ -11,7 +11,7 @@ export class AIController {
     const { messId, prompt, month, year } = req.body;
 
     // Validate mess exists and user is manager
-    const mess = await Mess.findById(messId);
+    const mess = await Mess.findById(messId).populate('members', 'name');
     if (!mess) {
       return sendSuccess(res, null, 'Mess not found', 404);
     }
@@ -20,11 +20,14 @@ export class AIController {
       return sendSuccess(res, null, 'Only mess manager can generate schedules', 403);
     }
 
+    const memberNames = mess.members.map((member: any) => member.name);
+
     const scheduleRequest: MarketScheduleRequest = {
       prompt,
       month: parseInt(month),
       year: parseInt(year),
       totalMembers: mess.members.length,
+      memberNames,
     };
 
     const result = await AIService.generateMarketSchedule(scheduleRequest);

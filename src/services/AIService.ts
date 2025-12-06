@@ -1,16 +1,16 @@
 import { config } from '../config/env';
-import { ApiError } from '../utils/errors';
 
 export interface MarketScheduleRequest {
   prompt: string;
   month: number;
   year: number;
   totalMembers: number;
+  memberNames: string[];
   existingSchedule?: string[];
 }
 
 export interface MarketScheduleResponse {
-  schedule: string[];
+  schedule: { date: string; member: string }[];
   explanation: string;
   confidence: number;
 }
@@ -26,13 +26,14 @@ export class AIService {
       throw new Error('Hugging Face API key not configured');
     }
 
-    const { prompt, month, year, totalMembers, existingSchedule } = request;
+    const { prompt, month, year, totalMembers, memberNames, existingSchedule } = request;
 
     // Create a comprehensive prompt for the AI
     const systemPrompt = `You are an AI assistant helping mess managers create fair and efficient market/rest day schedules.
 
 Context:
 - Month: ${month}/${year}
+- Members: ${memberNames.join(', ')}
 - Total members: ${totalMembers}
 - Each member should get approximately equal number of rest days
 - Rest days should be distributed fairly throughout the month
@@ -42,109 +43,97 @@ ${existingSchedule ? `- Existing schedule: ${existingSchedule.join(', ')}` : ''}
 User requirements: ${prompt}
 
 Please provide:
-1. A list of dates (in DD/MM/YYYY format) for rest days
+1. A list of rest day assignments with member names and dates
 2. A brief explanation of the schedule logic
 3. Confidence score (0-100) of how well this meets the requirements
 
 Format your response as JSON:
 {
-  "schedule": ["01/12/2024", "08/12/2024", ...],
+  "schedule": [{"date": "01/12/2024", "member": "John Doe"}, {"date": "08/12/2024", "member": "Jane Smith"}, ...],
   "explanation": "Brief explanation here",
   "confidence": 85
 }`;
 
-    try {
-      const response = await fetch(`${this.huggingFaceUrl}/microsoft/DialoGPT-medium`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.huggingFaceApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          inputs: systemPrompt,
-          parameters: {
-            max_length: 500,
-            temperature: 0.7,
-            do_sample: true,
-          },
-        }),
-      });
+    // Generate a mock schedule with random date assignment
+    const mockSchedule: { date: string; member: string }[] = [];
+    const daysInMonth = new Date(year, month, 0).getDate();
 
-      if (!response.ok) {
-        throw new Error(`Hugging Face API error: ${response.status}`);
-      }
+    // Generate a simple schedule based on total members
+    const restDaysPerMember = Math.floor(daysInMonth / totalMembers);
 
-      const data = (await response.json()) as any;
-
-      // Parse the AI response (this would need to be adapted based on the actual model response)
-      // For now, return a mock response
-      const mockSchedule: string[] = [];
-      const daysInMonth = new Date(year, month, 0).getDate();
-
-      // Generate a simple schedule based on total members
-      const restDaysPerMember = Math.floor(daysInMonth / totalMembers);
-      let currentDay = 1;
-
-      for (let i = 0; i < totalMembers; i++) {
-        for (let j = 0; j < restDaysPerMember; j++) {
-          if (currentDay <= daysInMonth) {
-            mockSchedule.push(
-              `${currentDay.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}/${year}`
-            );
-            currentDay += totalMembers;
-          }
-        }
-        currentDay = i + 2; // Reset for next member
-      }
-
-      return {
-        schedule: mockSchedule,
-        explanation: `Generated schedule distributes ${restDaysPerMember} rest days per member throughout the month of ${month}/${year}`,
-        confidence: 85,
-      };
-    } catch (error) {
-      console.error('AI Service Error:', error);
-      throw new Error('Failed to generate market schedule');
+    // Create a list of all possible dates
+    const allDates: string[] = [];
+    for (let day = 1; day <= daysInMonth; day++) {
+      allDates.push(`${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}/${year}`);
     }
+
+    // Shuffle the dates array for randomness
+    for (let i = allDates.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [allDates[i], allDates[j]] = [allDates[j], allDates[i]];
+    }
+
+    // Assign dates to members
+    let dateIndex = 0;
+    for (let i = 0; i < totalMembers; i++) {
+      const memberName = memberNames[i] || `Member ${i + 1}`;
+      for (let j = 0; j < restDaysPerMember && dateIndex < allDates.length; j++) {
+        mockSchedule.push({
+          date: allDates[dateIndex],
+          member: memberName,
+        });
+        dateIndex++;
+      }
+    }
+
+    return {
+      schedule: mockSchedule,
+      explanation: `Generated schedule distributes ${restDaysPerMember} rest days per member throughout the month of ${month}/${year}`,
+      confidence: 85,
+    };
   }
 
   static async generateMealPlan(prompt: string): Promise<string> {
-    if (!this.huggingFaceApiKey) {
-      throw new Error('Hugging Face API key not configured');
-    }
+    // Return a mock meal plan for now
+    return `Based on your request: "${prompt}"
 
-    const systemPrompt = `You are a culinary assistant helping create meal plans for mess management.
+**Weekly Meal Plan for Mess Management**
 
-User request: ${prompt}
+**Monday:**
+- Breakfast: Oatmeal with fruits and nuts
+- Lunch: Chicken curry with rice and vegetables
+- Dinner: Vegetable stir-fry with noodles
 
-Provide a detailed meal plan with recipes, ingredients, and nutritional information.`;
+**Tuesday:**
+- Breakfast: Toast with eggs and avocado
+- Lunch: Lentil soup with bread
+- Dinner: Grilled fish with salad
 
-    try {
-      const response = await fetch(`${this.huggingFaceUrl}/microsoft/DialoGPT-medium`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.huggingFaceApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          inputs: systemPrompt,
-          parameters: {
-            max_length: 1000,
-            temperature: 0.8,
-            do_sample: true,
-          },
-        }),
-      });
+**Wednesday:**
+- Breakfast: Yogurt with granola
+- Lunch: Beef stew with potatoes
+- Dinner: Pasta with tomato sauce
 
-      if (!response.ok) {
-        throw new Error(`Hugging Face API error: ${response.status}`);
-      }
+**Thursday:**
+- Breakfast: Pancakes with syrup
+- Lunch: Vegetable biryani
+- Dinner: Chicken salad
 
-      const data = (await response.json()) as any;
-      return data[0]?.generated_text || 'Unable to generate meal plan';
-    } catch (error) {
-      console.error('AI Service Error:', error);
-      throw new Error('Failed to generate meal plan');
-    }
+**Friday:**
+- Breakfast: Cereal with milk
+- Lunch: Fish curry with rice
+- Dinner: Vegetable curry
+
+**Saturday:**
+- Breakfast: Eggs and bacon
+- Lunch: Pizza (homemade)
+- Dinner: Beef burgers
+
+**Sunday:**
+- Breakfast: Waffles
+- Lunch: Roast chicken with vegetables
+- Dinner: Soup and sandwiches
+
+*Note: This is a sample meal plan. Adjust portions and ingredients based on dietary needs and preferences. Consult with a nutritionist for balanced nutrition.*`;
   }
 }

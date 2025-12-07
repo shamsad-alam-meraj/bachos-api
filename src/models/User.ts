@@ -10,6 +10,13 @@ const userSchema = new mongoose.Schema({
   profileImage: { type: String },
   role: { type: String, enum: ['user', 'manager', 'admin'], default: 'user' },
   messId: { type: mongoose.Schema.Types.ObjectId, ref: 'Mess' },
+  isDeleted: { type: Boolean, default: false },
+  deletedAt: { type: Date },
+  preferences: {
+    notifications: { type: Boolean, default: true },
+    language: { type: String, default: 'en' },
+    theme: { type: String, enum: ['light', 'dark'], default: 'light' },
+  },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });

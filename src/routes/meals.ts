@@ -7,6 +7,18 @@ const router = express.Router();
 // Create meal - Only managers can create meals
 router.post('/', authMiddleware, MealController.createMeal);
 
+// Bulk create meals - Only managers can create meals
+router.post('/bulk', authMiddleware, MealController.bulkCreateMeals);
+
+// Get meal statistics
+router.get('/stats/:messId', authMiddleware, MealController.getMealStatistics);
+
+// Calculate meal costs
+router.post('/calculate-costs/:messId', authMiddleware, MealController.calculateMealCosts);
+
+// Get user meal summary
+router.get('/summary/:messId/:userId', authMiddleware, MealController.getUserMealSummary);
+
 // Get meals with flexible filtering
 router.get('/', authMiddleware, MealController.getAllMeals);
 

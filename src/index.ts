@@ -6,6 +6,7 @@ import { config } from './config/env';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { rateLimiter } from './middleware/rateLimiter';
 import { requestLogger } from './middleware/requestLogger';
+import aiRoutes from './routes/ai';
 import analyticsRoutes from './routes/analytics';
 import authRoutes from './routes/auth';
 import dashboardRoutes from './routes/dashboard';
@@ -14,6 +15,7 @@ import expenseRoutes from './routes/expenses';
 import mealRoutes from './routes/meals';
 import messRoutes from './routes/mess';
 import reportsRoutes from './routes/reports';
+import subscriptionsRoutes from './routes/subscriptions';
 import userRoutes from './routes/users';
 import { logger } from './utils/logger';
 
@@ -96,6 +98,7 @@ app.get('/health', (req: Request, res: Response) => {
 });
 
 // API Routes
+app.use('/api/ai', aiRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
@@ -104,6 +107,7 @@ app.use('/api/expenses', expenseRoutes);
 app.use('/api/meals', mealRoutes);
 app.use('/api/mess', messRoutes);
 app.use('/api/reports', reportsRoutes);
+app.use('/api/subscriptions', subscriptionsRoutes);
 app.use('/api/users', userRoutes);
 
 // Root route

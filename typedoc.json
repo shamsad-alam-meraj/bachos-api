@@ -1,0 +1,44 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src/index.ts"],
+  "out": "docs",
+  "name": "BachOS API",
+  "includeVersion": true,
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "src/scripts/**/*"
+  ],
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "excludeInternal": true,
+  "excludeExternals": true,
+  "hideGenerator": true,
+  "readme": "README.md",
+  "theme": "default",
+  "gitRevision": "main",
+  "githubPages": false,
+  "categorizeByGroup": true,
+  "categoryOrder": [
+    "Controllers",
+    "Services",
+    "Models",
+    "Middleware",
+    "Utils",
+    "Types",
+    "Routes",
+    "*"
+  ],
+  "groupOrder": [
+    "Controllers",
+    "Services",
+    "Models",
+    "Middleware",
+    "Utils",
+    "Types",
+    "Routes",
+    "*"
+  ]
+}

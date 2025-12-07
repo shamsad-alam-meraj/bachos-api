@@ -285,7 +285,10 @@ export class MessService {
     }
 
     // Validate mealRate if provided
-    if (updateData.mealRate !== undefined && (!isFinite(updateData.mealRate) || isNaN(updateData.mealRate))) {
+    if (
+      updateData.mealRate !== undefined &&
+      (!isFinite(updateData.mealRate) || isNaN(updateData.mealRate))
+    ) {
       throw new Error('Invalid meal rate: must be a valid number');
     }
 

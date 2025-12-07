@@ -13,6 +13,13 @@ const envSchema = z.object({
   RATE_LIMIT_WINDOW_MS: z.string().default('900000'),
   RATE_LIMIT_MAX_REQUESTS: z.string().default('100'),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
+  // Payment gateways
+  SSLCOMMERZ_STORE_ID: z.string().optional(),
+  SSLCOMMERZ_STORE_PASSWORD: z.string().optional(),
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_PUBLISHABLE_KEY: z.string().optional(),
+  // AI Integration
+  HUGGINGFACE_API_KEY: z.string().optional(),
 });
 
 const parseEnv = () => {
@@ -53,6 +60,17 @@ export const config = {
   },
   logging: {
     level: env.LOG_LEVEL,
+  },
+  sslcommerz: {
+    storeId: env.SSLCOMMERZ_STORE_ID,
+    storePassword: env.SSLCOMMERZ_STORE_PASSWORD,
+  },
+  stripe: {
+    secretKey: env.STRIPE_SECRET_KEY,
+    publishableKey: env.STRIPE_PUBLISHABLE_KEY,
+  },
+  huggingface: {
+    apiKey: env.HUGGINGFACE_API_KEY,
   },
   isProd: env.NODE_ENV === 'production',
   isDev: env.NODE_ENV === 'development',

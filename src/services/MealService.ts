@@ -5,7 +5,18 @@ export class MealService {
   static async createMeal(
     messId: string,
     userId: string,
-    mealData: { userId: string; breakfast: number; lunch: number; dinner: number; date: string },
+    mealData: {
+      userId: string;
+      breakfast: number;
+      lunch: number;
+      dinner: number;
+      date: string;
+      status?: string;
+      isGuest?: boolean;
+      guestName?: string;
+      mealType?: string;
+      preferences?: any;
+    },
     requestingUserId: string
   ) {
     // Verify that the mess exists
@@ -33,6 +44,11 @@ export class MealService {
       lunch: mealData.lunch,
       dinner: mealData.dinner,
       date: new Date(mealData.date),
+      status: mealData.status || 'taken',
+      isGuest: mealData.isGuest || false,
+      guestName: mealData.guestName,
+      mealType: mealData.mealType || 'regular',
+      preferences: mealData.preferences,
     });
 
     await meal.save();
@@ -41,6 +57,86 @@ export class MealService {
     await meal.populate('userId', 'name email role');
 
     return meal;
+  }
+
+  static async bulkCreateMeals(
+    messId: string,
+    mealsData: Array<{
+      userId: string;
+      breakfast: number;
+      lunch: number;
+      dinner: number;
+      date: string;
+      status?: string;
+      isGuest?: boolean;
+      guestName?: string;
+      mealType?: string;
+      preferences?: any;
+    }>,
+    requestingUserId: string
+  ) {
+    // Verify that the mess exists
+    const mess = await Mess.findById(messId);
+    if (!mess) {
+      throw new Error('Mess not found');
+    }
+
+    // Check if the requesting user is the manager
+    const isManager = mess.managerId.toString() === requestingUserId;
+    if (!isManager) {
+      throw new Error('Only mess managers can add meals');
+    }
+
+    // Validate all users belong to the mess
+    const messMemberIds = mess.members.map((id) => id.toString());
+    const invalidUsers = mealsData.filter((meal) => !messMemberIds.includes(meal.userId));
+
+    if (invalidUsers.length > 0) {
+      throw new Error(
+        `Users do not belong to this mess: ${invalidUsers.map((u) => u.userId).join(', ')}`
+      );
+    }
+
+    // Check for existing meals on the same date for the same users to avoid duplicates
+    const mealDate = new Date(mealsData[0].date);
+    const existingMeals = await Meal.find({
+      messId,
+      userId: { $in: mealsData.map((m) => m.userId) },
+      date: {
+        $gte: new Date(mealDate.getFullYear(), mealDate.getMonth(), mealDate.getDate()),
+        $lt: new Date(mealDate.getFullYear(), mealDate.getMonth(), mealDate.getDate() + 1),
+      },
+    });
+
+    if (existingMeals.length > 0) {
+      const existingUserIds = existingMeals.map((m) => m.userId.toString());
+      throw new Error(`Meals already exist for users on this date: ${existingUserIds.join(', ')}`);
+    }
+
+    // Create meal documents
+    const mealDocuments = mealsData.map((mealData) => ({
+      messId,
+      userId: mealData.userId,
+      breakfast: mealData.breakfast,
+      lunch: mealData.lunch,
+      dinner: mealData.dinner,
+      date: new Date(mealData.date),
+      status: mealData.status || 'taken',
+      isGuest: mealData.isGuest || false,
+      guestName: mealData.guestName,
+      mealType: mealData.mealType || 'regular',
+      preferences: mealData.preferences,
+    }));
+
+    // Insert all meals at once
+    const insertedMeals = await Meal.insertMany(mealDocuments);
+
+    // Populate user info for all meals
+    const populatedMeals = await Meal.find({
+      _id: { $in: insertedMeals.map((m) => m._id) },
+    }).populate('userId', 'name email role');
+
+    return populatedMeals;
   }
 
   static async getMeals(
@@ -188,5 +284,98 @@ export class MealService {
     }
 
     await Meal.findByIdAndDelete(mealId);
+  }
+
+  static async getMealStatistics(
+    messId: string,
+    filters: {
+      startDate?: string;
+      endDate?: string;
+      userId?: string;
+    }
+  ) {
+    const query: any = { messId };
+
+    if (filters.startDate && filters.endDate) {
+      query.date = {
+        $gte: new Date(filters.startDate),
+        $lte: new Date(filters.endDate),
+      };
+    }
+
+    if (filters.userId && filters.userId !== 'all') {
+      query.userId = filters.userId;
+    }
+
+    const meals = await Meal.find(query);
+
+    const stats = {
+      totalMeals: meals.length,
+      breakfastCount: meals.reduce((sum, meal) => sum + meal.breakfast, 0),
+      lunchCount: meals.reduce((sum, meal) => sum + meal.lunch, 0),
+      dinnerCount: meals.reduce((sum, meal) => sum + meal.dinner, 0),
+      totalMealCount: meals.reduce(
+        (sum, meal) => sum + meal.breakfast + meal.lunch + meal.dinner,
+        0
+      ),
+      guestMeals: meals.filter((meal) => meal.isGuest).length,
+      skippedMeals: meals.filter((meal) => meal.status === 'skipped').length,
+      offdayMeals: meals.filter((meal) => meal.mealType === 'offday').length,
+      regularMeals: meals.filter((meal) => meal.mealType === 'regular').length,
+      vegetarianMeals: meals.filter((meal) => meal.preferences?.vegetarian).length,
+      totalCost: meals.reduce((sum, meal) => sum + (meal.cost || 0), 0),
+    };
+
+    return stats;
+  }
+
+  static async calculateMealCosts(messId: string, mealRate: number) {
+    // Update all meals without cost calculation
+    const mealsWithoutCost = await Meal.find({
+      messId,
+      cost: { $exists: false },
+    });
+
+    for (const meal of mealsWithoutCost) {
+      const totalMeals = meal.breakfast + meal.lunch + meal.dinner;
+      meal.cost = totalMeals * mealRate;
+      await meal.save();
+    }
+
+    return { updated: mealsWithoutCost.length };
+  }
+
+  static async getUserMealSummary(
+    messId: string,
+    userId: string,
+    filters: {
+      startDate?: string;
+      endDate?: string;
+    }
+  ) {
+    const query: any = { messId, userId };
+
+    if (filters.startDate && filters.endDate) {
+      query.date = {
+        $gte: new Date(filters.startDate),
+        $lte: new Date(filters.endDate),
+      };
+    }
+
+    const meals = await Meal.find(query);
+
+    const summary = {
+      totalDays: meals.length,
+      totalBreakfast: meals.reduce((sum, meal) => sum + meal.breakfast, 0),
+      totalLunch: meals.reduce((sum, meal) => sum + meal.lunch, 0),
+      totalDinner: meals.reduce((sum, meal) => sum + meal.dinner, 0),
+      totalMeals: meals.reduce((sum, meal) => sum + meal.breakfast + meal.lunch + meal.dinner, 0),
+      totalCost: meals.reduce((sum, meal) => sum + (meal.cost || 0), 0),
+      skippedDays: meals.filter((meal) => meal.status === 'skipped').length,
+      guestMeals: meals.filter((meal) => meal.isGuest).length,
+      offDays: meals.filter((meal) => meal.mealType === 'offday').length,
+    };
+
+    return summary;
   }
 }

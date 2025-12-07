@@ -3,6 +3,7 @@ import express, { type Request, type Response } from 'express';
 import helmet from 'helmet';
 import { connectDatabase } from './config/database';
 import { config } from './config/env';
+import { swaggerUi, specs } from './config/swagger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { rateLimiter } from './middleware/rateLimiter';
 import { requestLogger } from './middleware/requestLogger';
@@ -96,6 +97,9 @@ app.get('/health', (req: Request, res: Response) => {
     },
   });
 });
+
+// Swagger documentation
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(specs));
 
 // API Routes
 app.use('/api/ai', aiRoutes);

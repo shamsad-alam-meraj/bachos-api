@@ -20,6 +20,10 @@ const envSchema = z.object({
   STRIPE_PUBLISHABLE_KEY: z.string().optional(),
   // AI Integration
   HUGGINGFACE_API_KEY: z.string().optional(),
+  // Google OAuth
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_REDIRECT_URI: z.string().optional(),
 });
 
 const parseEnv = () => {
@@ -71,6 +75,11 @@ export const config = {
   },
   huggingface: {
     apiKey: env.HUGGINGFACE_API_KEY,
+  },
+  google: {
+    clientId: env.GOOGLE_CLIENT_ID,
+    clientSecret: env.GOOGLE_CLIENT_SECRET,
+    redirectUri: env.GOOGLE_REDIRECT_URI,
   },
   isProd: env.NODE_ENV === 'production',
   isDev: env.NODE_ENV === 'development',

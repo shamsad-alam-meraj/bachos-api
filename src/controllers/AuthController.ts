@@ -14,4 +14,9 @@ export class AuthController {
     const result = await AuthService.login(req.body);
     sendSuccess(res, result, 'Login successful');
   });
+
+  static googleCallback = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const result = req.user as any;
+    sendSuccess(res, result, 'Login successful');
+  });
 }

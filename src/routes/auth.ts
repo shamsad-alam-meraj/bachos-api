@@ -6,6 +6,7 @@
  */
 
 import express from 'express';
+import passport from 'passport';
 import { AuthController } from '../controllers/AuthController';
 
 const router = express.Router();
@@ -140,5 +141,63 @@ router.post('/signup', AuthController.signup);
  *         description: Invalid credentials
  */
 router.post('/login', AuthController.login);
+
+/**
+ * @swagger
+ * /api/auth/google:
+ *   get:
+ *     summary: Initiate Google OAuth login
+ *     tags: [Authentication]
+ *     responses:
+ *       302:
+ *         description: Redirect to Google OAuth
+ */
+router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+
+/**
+ * @swagger
+ * /api/auth/google/callback:
+ *   get:
+ *     summary: Google OAuth callback
+ *     tags: [Authentication]
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Login successful
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     token:
+ *                       type: string
+ *                       description: JWT token
+ *                     user:
+ *                       type: object
+ *                       properties:
+ *                         id:
+ *                           type: string
+ *                           description: User ID
+ *                         name:
+ *                           type: string
+ *                           description: User's name
+ *                         email:
+ *                           type: string
+ *                           description: User's email
+ *       401:
+ *         description: Authentication failed
+ */
+router.get('/google/callback',
+  passport.authenticate('google', { failureRedirect: '/login' }),
+  AuthController.googleCallback
+);
 
 export default router;
